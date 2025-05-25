@@ -31,11 +31,13 @@ I servizi di **Leonia+** si suddividono in tre categorie:
 - **Servizi Specializzanti** → **Esclusivi di una piattaforma** (es. *Leonia+ Notizie* e *NovaHub*, disponibili solo su browser).
 
 ### Cos'è il formato .nsk?
-Il formato .nsk (Nova Surf Package) è un'estensione proprietaria usata per eseguire gli add-on, simile aL .crx di Chrome. E' inoltre possibile importare anche altre estesioni al di fuori del browser, purché esse siano in formato .nsk 
+Il formato .nsk (Nova Surf Package) è un'estensione usata per eseguire gli add-on, simile aL .crx di Chrome. E' inoltre possibile importare anche altre estesioni al di fuori del browser, purché esse siano in formato .nsk. Anche ArcadiaAI e Nova QuickNote supportano il formato .nsk
 
-### Cos'è ArcadiaAI
-ArcadiaAI è il chatbot ufficiale di Nova Surf, basato sull’API LLaMA2. È progettato per offrire un’esperienza interattiva avanzata, con diverse funzionalità tra cui:
-- Ricerca su Internet: 
+### cos'è ArcadiaAI?
+ArcadiaAI è un chatbot di intelligenza artificiale generativa libero, basato sul modello CES, progettato per rendere l'interazione con l'IA potente e intuitiva per tutti. ArcadiaAI è dotato di un'interfaccia utente user-friendly, ha molte funzionalità come:
+
+- **Ricerca su Internet** → ArcadiaAI è in grado di effettuare ricerche su Internet tramite il motore di ricerca DuckDuckGo, e al termine della ricerca restituisce all'utente i tre risultati più pertinenti e una breve sinossi del primo risultato
+- **Comandi Rapidi** → I Comandi Rapidi permettono all'utente ad avere una risposta immediata, i comandi rapidi sono preceduti da @ e permettono all'IA di effettuare risposte rapide, @cerca, permette ad ArcadiaAI di cercare su Duck; @telegraph, scrive e pubblica contenuti su telegraph; @meteo, mostra all'utente le previsioni del meteo; per vedere i Comandi Rapidi completi, basta scrivere @aiuto
 
 ### Cos'è Nova QuickNote?
 Nova QuickNote è un editor di testo libero e opensource disponibili sia insieme al browser sia come applicazione, utile per prendere appunti, scrivere ed eseguire codici comandi e per 
