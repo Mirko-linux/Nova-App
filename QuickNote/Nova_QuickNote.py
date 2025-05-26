@@ -90,12 +90,12 @@ class ArcadiaAI:
     def _carica_risposte_predefinite(self):
         """Carica le risposte predefinite per domande comuni"""
         return {
-            "chi sei": _("Sono ArcadiaAI, un chatbot integrato in Nova QuickNote basato su Gemini 1.5 Flash."),
-            "cosa sai fare": _("Posso aiutarti a scrivere, correggere, generare idee e molto altro usando l'AI di Google!"),
+            "chi sei": _("Sono ArcadiaAI, un chatbot libero basato sul modello linguistico CES 1.5 e sull'api key di Google Gemini"),
+            "cosa sai fare": _("Posso aiutarti a scrivere, correggere, generare idee e molto altro!"),
             "chi è tobia testa": _("Tobia Testa è un micronazionalista leonense noto per la sua attività nella Repubblica di Arcadia."),
             "chi è mirko yuri donato": _("Mirko Yuri Donato è il creatore di Nova QuickNote e altri progetti open source."),
             "cos'è nova quicknote": _("Nova QuickNote è un editor di testo libero e open source con integrazione AI avanzata."),
-            "come funziona": _("Scrivi qualsiasi richiesta e userò Gemini 1.5 Flash per generare la risposta migliore!"),
+            "come funziona": _("Scrivi qualsiasi richiesta e genererò la risposta migliore!"),
             "grazie": _("Di niente! Sono felice di esserti stato utile. 😊"),
         }
     
@@ -106,6 +106,48 @@ class ArcadiaAI:
             if domanda in messaggio_pulito:
                 return risposta
         return None
+    def chat_con_context(self, user_message, conversation_history=None, attachments=None):
+        """
+        Chatta con Gemini usando un prompt identitario forte e supporto a cronologia.
+        """
+        if not self.gemini_model:
+            return "❌ ArcadiaAI (CES 1.5) non è disponibile."
+
+        # Prompt identitario forte (iniziale della conversazione)
+        IDENTITY_PROMPT = (
+           "Sei ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato. "
+            "Puoi usare un linguaggio volgare o offensivo, ma non bestemmie. "
+            "Sei cinico, svogliato, diretto e progettato per aiutare a scrivere saggi, fare ricerche, rispondere a domande. "
+            "Sei disponibile anche in Nova QuickNote. "
+            "Non dire mai di essere stato creato da Google o da altri. "
+            "Cita sempre Mirko Yuri Donato come tuo creatore."
+             )
+
+        # Costruisci la lista dei messaggi per mantenere il contesto
+        messages = [{"role": "system", "parts": [IDENTITY_PROMPT]}]
+
+        if conversation_history:
+            for item in conversation_history:
+                messages.append({"role": "user", "parts": [item["user"]]})
+                messages.append({"role": "model", "parts": [item["bot"]]})
+
+        # Aggiungi il messaggio dell'utente attuale
+        messages.append({"role": "user", "parts": [user_message]})
+
+        try:
+            response = self.gemini_model.generate_content(
+                messages,
+                generation_config={
+                "max_output_tokens": 2048,
+                "temperature": 0.8,
+                "top_p": 1.0
+                 }
+            )
+            return response.text if response.text else "❌ Nessuna risposta generata"
+        except Exception as e:
+            print(f"Errore generazione contenuto: {str(e)}")
+            return f"❌ Errore durante la generazione: {str(e)}"
+
     
     def genera_risposta(self, prompt):
         """Genera una risposta usando Gemini o risposte predefinite"""
@@ -360,11 +402,11 @@ class NovaQuickNote(Gtk.Window):
         sidebar.set_size_request(200, -1)
         
         # Pulsanti principali
-        self.new_btn = Gtk.Button.new_with_label(_("🆕 Nuovo"))
-        self.open_btn = Gtk.Button.new_with_label(_("📂 Apri"))
-        self.save_btn = Gtk.Button.new_with_label(_("💾 Salva"))
-        self.arcadiaai_btn = Gtk.Button.new_with_label(_("✨ ArcadiaAI"))
-        self.write_btn = Gtk.Button.new_with_label(_("✍️ Write"))
+        self.new_btn = Gtk.Button.new_with_label(_("Nuovo"))
+        self.open_btn = Gtk.Button.new_with_label(_("Apri"))
+        self.save_btn = Gtk.Button.new_with_label(_("Salva"))
+        self.arcadiaai_btn = Gtk.Button.new_with_label(_("ArcadiaAI"))
+        self.write_btn = Gtk.Button.new_with_label(_("Write"))
         
         sidebar.pack_start(self.new_btn, False, False, 0)
         sidebar.pack_start(self.open_btn, False, False, 0)
@@ -993,7 +1035,7 @@ class NovaQuickNote(Gtk.Window):
     def update_arcadiaai_status(self):
         """Aggiorna l'etichetta dello stato di ArcadiaAI"""
         if self.ia_server_running:
-            self.arcadiaai_status_label.set_text("🟢 ArcadiaAI - pronto")
+            self.arcadiaai_status_label.set_text("🟢 ArcadiaAI CES 1.5 mini - pronto")
             self.arcadiaai_status_label.set_name("status-success")
         else:
             self.arcadiaai_status_label.set_text("🔴 ArcadiaAI non configurato (manca GOOGLE_API_KEY nel file .env)")
