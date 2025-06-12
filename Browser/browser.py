@@ -23,13 +23,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 import requests
 
-# Assicurati che queste classi siano importate o definite nel tuo codice
-# Se queste classi sono in file separati, devono essere importate qui.
-# Esempio:
-# from .account_dialog import AccountDialog
-# from .user_menu_dialog import UserMenuDialog
-# from .settings_window import SettingsWindow
-# from .gestore_estensioni import GestoreEstensioni
 class Browser(QMainWindow):
     def __init__(self):
         super().__init__()
