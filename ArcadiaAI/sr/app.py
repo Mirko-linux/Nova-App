@@ -518,8 +518,7 @@ def chat_with_gemini(user_message, conversation_history, attachments=None):
     except Exception as e:
         print(f"Errore dettagliato Gemini 1.5 Flash: {str(e)}")
         return "❌ Si è verificato un errore con ArcadiaAI. Riprova più tardi."
-# ...existing code...
-
+        
 def search_duckduckgo(query):
     """Esegue una ricerca su DuckDuckGo e restituisce i primi 3 risultati puliti."""
     url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
