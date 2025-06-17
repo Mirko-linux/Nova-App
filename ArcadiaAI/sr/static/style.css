@@ -1,3 +1,4 @@
+/* Reset di base */
 * { 
     box-sizing: border-box; 
     margin: 0; 
@@ -13,6 +14,7 @@ body {
     line-height: 1.5;
 }
 
+/* Sidebar principale */
 #sidebar {
     width: 260px;
     background: #202123;
@@ -21,6 +23,7 @@ body {
     border-right: 1px solid #444;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0; 
 }
 
 #sidebar h2 {
@@ -31,6 +34,7 @@ body {
     font-weight: 600;
 }
 
+/* Stili generici per i bottoni nella sidebar */
 #sidebar button {
     width: 100%;
     padding: 10px;
@@ -52,6 +56,7 @@ body {
     transform: scale(0.98);
 }
 
+/* Lista delle conversazioni */
 #chat-list {
     list-style: none;
     margin-top: 15px;
@@ -59,8 +64,9 @@ body {
     overflow-y: auto;
 }
 
+/* Ogni voce della chat */
 #chat-list li {
-    padding: 12px;
+    padding: 8px 12px; 
     margin-bottom: 8px;
     background: #353740;
     border-radius: 5px;
@@ -68,9 +74,12 @@ body {
     color: #ececf1;
     position: relative;
     transition: background-color 0.2s ease;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    gap: 5px; 
+    overflow: hidden; 
 }
 
 #chat-list li:hover {
@@ -81,13 +90,129 @@ body {
     background: #4e4f5c;
 }
 
+.chat-item-content {
+    flex-grow: 1; 
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-title {
+    display: block; 
+    font-weight: 500;
+}
+
+.chat-date {
+    display: block; 
+    font-size: 0.8em;
+    color: #b0b0b0;
+}
+
+/* Stili per il menu dei tre puntini */
+.chat-menu {
+    position: relative;
+    flex-shrink: 0; 
+    /* Assicura che il contenitore del menu sia sempre presente e dimensionato */
+    height: 18px; /* Altezza fissa per il contenitore del menu */
+    width: 18px; /* Larghezza fissa per il contenitore del menu */
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    /* Aggiunto: impedisce eventi mouse sul menu quando non visibile */
+    pointer-events: none; /* Disabilita eventi mouse sul contenitore */
+}
+
+.chat-menu-btn {
+    background: none;
+    border: none;
+    color: #999; 
+    cursor: pointer;
+    font-size: 18px; /* Mantieni la dimensione del font normale */
+    padding: 0; 
+    opacity: 0; /* Nasconde il pulsante senza toglierlo dal flusso */
+    visibility: hidden; /* Nasconde per la compatibilità con browser più vecchi */
+    line-height: 1; 
+    height: 18px; /* Altezza fissa per il pulsante */
+    width: 18px; /* Larghezza fissa per il pulsante */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 3px;
+    transition: opacity 0.2s ease, visibility 0.2s ease, background-color 0.2s ease; 
+    /* Aggiunto: Consenti eventi mouse sul pulsante solo quando è visibile */
+    pointer-events: auto; /* Riabilita eventi mouse sul pulsante */
+}
+
+/* Questo è il punto chiave per far apparire i pulsanti */
+.chat-item:hover .chat-menu-btn {
+    opacity: 1; /* Rendi completamente visibile al passaggio del mouse */
+    visibility: visible; /* Cambia visibilità */
+    background: rgba(255,255,255,0.1); /* Sfondo al passaggio del mouse */
+}
+
+/* Stili per il contenuto del menu a tendina */
+.chat-menu-content {
+    display: none; 
+    position: absolute;
+    background-color: #f9f9f9; /* Sfondo chiaro di default */
+    min-width: 150px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1000; 
+    border-radius: 5px;
+    left: auto; 
+    right: 0; 
+    top: 100%; 
+    transform: translateY(5px); 
+    border: 1px solid #333; /* Bordo scuro per il menu */
+    /* Aggiunto: Consenti eventi mouse sul contenuto del menu */
+    pointer-events: auto; /* Permetti interazione con il menu a tendina */
+}
+
+.chat-menu-content button {
+    color: black;
+    padding: 8px 12px;
+    text-decoration: none;
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.chat-menu-content button:hover {
+    background-color: #ddd;
+}
+
+.chat-menu.show .chat-menu-content {
+    display: block; 
+}
+
+/* Stili per tema scuro per il menu delle chat */
+[data-theme="dark"] .chat-menu-content {
+    background-color: #2d2d2d; 
+    border: 1px solid #1a1a1a; 
+}
+
+[data-theme="dark"] .chat-menu-content button {
+    color: #fff;
+}
+
+[data-theme="dark"] .chat-menu-content button:hover {
+    background-color: #40414f; 
+}
+
+
+/* Area Chat principale */
 #chat-area {
     flex: 1;
     display: flex;
     flex-direction: column;
     position: relative;
+    min-width: 0; 
 }
 
+/* Chatbox (area messaggi) */
 #chatbox {
     flex: 1;
     padding: 20px;
@@ -125,6 +250,7 @@ body {
     border-bottom-left-radius: 0;
 }
 
+/* Area input e bottoni */
 #input-area {
     display: flex;
     padding: 15px;
@@ -154,6 +280,7 @@ body {
     color: #a1a1a9;
 }
 
+/* Stili generici per i bottoni nell'area input */
 button {
     background: #10a37f;
     color: white;
@@ -180,38 +307,6 @@ button:disabled {
     cursor: not-allowed;
 }
 
-.menu-btn {
-    float: right;
-    padding: 0 5px;
-    cursor: pointer;
-    border-radius: 3px;
-}
-
-.menu-btn:hover {
-    background: rgba(255,255,255,0.1);
-}
-
-.chat-menu {
-    display: none;
-    position: absolute;
-    right: 10px;
-    top: 40px;
-    background: #2d2e35;
-    border-radius: 5px;
-    z-index: 100;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    min-width: 150px;
-}
-
-.chat-menu div {
-    padding: 8px 15px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.chat-menu div:hover {
-    background: #40414f;
-}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
@@ -231,33 +326,130 @@ button:disabled {
     background: #666;
 }
 
-/* Responsive design */
+/* Stili per il messaggio di stato (in esecuzione...) */
+#status-message {
+    padding: 5px;
+    background-color: #e0f7fa;
+    border-radius: 5px;
+    margin: 10px 20px; 
+    text-align: center;
+    color: #00796b;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: none; 
+}
+
+/* Stili per i messaggi flash (displayMessage) */
+#message-display {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    z-index: 10000; 
+    color: white;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    display: none; 
+    transition: opacity 0.3s ease-in-out;
+}
+.message-display.info { background-color: #2196F3; }
+.message-display.success { background-color: #4CAF50; }
+.message-display.error { background-color: #F44336; }
+
+
+/* Stili per l'anteprima dei file */
+#files-preview {
+    padding: 10px;
+    background: #40414f; 
+    border-radius: 8px;
+    margin: 10px 15px; 
+    border: 1px dashed #555; 
+    display: none; 
+    max-height: 100px; 
+    overflow-y: auto; 
+}
+
+.file-preview-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    margin: 5px 0;
+    background: #53545f; 
+    border-radius: 4px;
+    color: #ececf1; 
+    font-size: 0.9em;
+}
+
+.remove-file {
+    background: none;
+    border: none;
+    color: #ff4444; 
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 0 5px;
+}
+
+
+/* Responsive design per schermi più piccoli */
 @media (max-width: 768px) {
-    #sidebar {
-        width: 200px;
-        padding: 10px;
+    body {
+        flex-direction: column; 
     }
-    
-    .message {
-        max-width: 90%;
-        padding: 10px 14px;
+
+    #sidebar {
+        width: 100%; 
+        height: auto; 
+        max-height: 200px; 
+        border-right: none;
+        border-bottom: 1px solid #444;
+        overflow-y: auto;
+    }
+
+    #chat-area {
+        height: calc(100vh - 200px); 
+        flex-shrink: 1;
+    }
+
+    #input-area {
+        padding: 10px;
+        flex-wrap: wrap; 
+    }
+
+    #input {
+        flex-basis: 100%; 
+        margin-bottom: 10px;
+    }
+
+    button {
+        flex-grow: 1; 
+        min-width: unset; 
+    }
+
+    #status-message {
+        margin: 10px; 
     }
 }
 
+/* Stili per schermi molto piccoli (es. smartphone) */
 @media (max-width: 480px) {
-    body {
-        flex-direction: column;
-    }
-    
     #sidebar {
-        width: 100%;
-        height: auto;
-        max-height: 200px;
-        border-right: none;
-        border-bottom: 1px solid #444;
+        max-height: 150px; 
     }
-    
     #chat-area {
-        height: calc(100vh - 200px);
+        height: calc(100vh - 150px); 
     }
-}
+    #input-area {
+        flex-direction: column; 
+    }
+    button {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    #input {
+        margin-bottom: 5px;
+    }
