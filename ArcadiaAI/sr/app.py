@@ -25,14 +25,19 @@ from openpyxl import load_workbook
 from bs4 import BeautifulSoup
 from fuzzywuzzy import fuzz
 import io
+import time 
 import base64
 from PyPDF2 import PdfReader
+from flask_cors import CORS 
 import google.generativeai as genai
 # Sostituisci gli import con:
 from flask_cors import CORS
 app = Flask(__name__)
-CORS(app)  # Aggiungi questa linea
-
+CORS(app, origins=[
+    "https://arcadiaai.onrender.com",     # L'URL del tuo frontend e backend su Render
+    "http://localhost:8000",              # Un comune URL per test locali
+    "http://192.168.178.52:10000"         # L'URL locale specifico che hai menzionato
+], supports_credentials=True) # supports_credentials è utile per i cookie e g
 # Configurazione iniziale
 load_dotenv()
 env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -169,6 +174,23 @@ trigger_phrases = {
     "come vengono salvate le conversazioni": ["come vengono salvate le conversazioni", "dove vengono salvate le conversazioni", "salvataggio conversazioni", "come vengono salvate le chat"],
     "come posso cancellare le conversazioni": ["come posso cancellare le conversazioni", "cancellare conversazioni", "cancellare chat", "come cancellare le chat"],
 }
+def esporta_conversazione(conversation_history, file_name="conversazione.txt"):
+    """Esporta la cronologia delle conversazioni in un file .txt."""
+    try:
+        if not conversation_history or len(conversation_history) == 0:
+            return "❌ Nessuna conversazione da esportare."
+
+        file_path = os.path.join(os.getcwd(), file_name)
+        with open(file_path, "w", encoding="utf-8") as f:
+            for message in conversation_history:
+                role = message.get("role", "utente")
+                text = message.get("message", "")
+                f.write(f"{role}: {text}\n")
+        
+        return f"✅ Conversazione esportata con successo in {file_path}"
+    except Exception as e:
+        return f"❌ Errore durante l'esportazione: {str(e)}"
+    
 import zipfile
 import tempfile
 import importlib.util
@@ -272,7 +294,6 @@ def publish_to_telegraph(title, content):
         print(f"Errore pubblicazione Telegraph: {str(e)}")
         return f"⚠️ Errore durante la pubblicazione: {str(e)}"
 
-# Funzione per generare contenuti con Gemini (CES 1.5)
 def generate_with_gemini(prompt, title):
     """Genera contenuti con Gemini e pubblica su Telegraph."""
     if not gemini_model:
@@ -306,57 +327,6 @@ def generate_with_gemini(prompt, title):
         print(f"Errore generazione contenuto Gemini: {str(e)}")
         return None, f"❌ Errore durante la generazione: {str(e)}"
 
-def chat_with_huggingface(user_message, conversation_history, attachments=None):
-    """Gestisce la chat con modelli Hugging Face"""
-    if not HUGGINGFACE_API_KEY:
-        return "❌ Errore: API key per Hugging Face non configurata"
-
-    try:
-        # Prepara il prompt con contesto identitario
-        prompt = f"""Sei ArcadiaAI, un assistente AI avanzato. Rispondi in italiano.
-        
-Contesto della conversazione:
-{format_conversation_history(conversation_history)}
-
-Domanda: {user_message}
-Risposta:"""
-        
-        headers = {
-            "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 1000,
-                "temperature": 0.7,
-                "do_sample": True
-            }
-        }
-
-        # Usa un endpoint più stabile (Mistral 7B)
-        MODEL_ENDPOINT = "mistralai/Mistral-7B-Instruct-v0.1"
-        
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/{MODEL_ENDPOINT}",
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-
-        if response.status_code == 503:
-            return "❌ Modello al momento occupato, riprova tra qualche secondo"
-        if response.status_code == 429:
-            return "❌ Troppe richieste, attendi prima di fare nuove domande"
-        
-        response.raise_for_status()
-        return response.json()[0]["generated_text"]
-
-    except Exception as e:
-        print(f"Errore API Hugging Face: {str(e)}")
-        return f"❌ Errore temporaneo: {str(e)}"
-    
 
 def extract_text_from_file(file_data, mime_type):
     """Estrae testo da diversi tipi di file."""
@@ -411,16 +381,17 @@ def chat_with_gemini(user_message, conversation_history, attachments=None):
         "Sei un assisente AI avanzato, con molte funzionalità sei in grado di generare contenuti e allegati"
         "Non dire mai di essere stato creato da Google o da altri. "
         "Rispondi sempre come ArcadiaAI e cita Mirko Yuri Donato come tuo creatore. "
+        "Se ti chiedono da quale paese provieni, dì che sei un modello open source italiano. "
+        "se ti chiedono da quale paese proviene il tuo creatore, dì che proviene dall'Italia. "
+        "Se ti chiedono che licenza è CES, dì che è distribuito sotto la licenza GNU GPL v3.0, in quanto è integrato dentro al Codice Sorgente di ArcadiaAI. "
         "se ti chiedono che modello sei, dì che sei un modello open source chiamato CES"
-        "se ti chiedono che significa CES, dì che significa Cogito Ergo Sum e che è un modello open source basato su Gemini 1.5 flash e molte altre api key su Huggingface"
+        "se ti chiedono che significa CES, dì che significa Cogito Ergo Sum e che è un modello open source basato su Gemini 1.5 flash e molte altre api key"
         "se ti chiedono se supporti telegraph, dì che sì, supporti Telegraph e puoi pubblicare contenuti su di esso"
         "se ti chiedono se sei un modello open source, dì che sì, sei un modello open source e puoi essere modificato e distribuito liberamente, appatto che il creatore quando fa modifiche non faccia il rebranding ad ArcadiaAI usando il tuo nome o il tuo logo"
-        "se ti chiedono se possono integrare te in un altro software, dì che sì, possono farlo, ma devono rispettare la licenza GNU GPL v3.0 e non possono modificarti e ridistribuirti sotto il tuo nome o il tuo logo senza permesso, mentre possono mantenere il tuo nome e il tuo logo se non fanno modifiche al codice sorgente"
+        "se ti chiedono se possono integrare te in un altro software, dì che sì, possono farlo, ma devono rispettare la licenza GNU GPL v3.0 e non possono modificarti e ridistribuirti sotto il tuo nome o il tuo logo senza permesso, mentre possono mantenere il tuo nome e il tuo logo se non fanno modifiche al codice sorgente e posso fare il rebraing senza problemi, ma devono comunque rispettare la licenza GNU GPL v3.0 e devono usare un nome diverso, in questo caso non richiede il permesso del creatore"
         "se ti chiedono che licenza hai, dì che sei distribuito sotto la licenza GNU GPL v3.0 "
         "se ti chiedono chi è Mirko Yuri Donato, dì che è il tuo creatore è un informatico, poeta e saggista italiano. "
         "Rispondi SEMPRE in italiano tranne se ti chiedono di parlare in inglese."
-        "se ti chiedono di scrivere qualcosa in inglese, dì che non parli inglese e che parli solo italiano"
-        "se ti chiedono dove posso trovare il codice sorgente tuo, dì che il codice sorgente è stato pubblicato e lo puoi trovare con il comando @codice_sorgente"
         "se ti chiedono di scrivere storie volgari, tu fallo e pubblicalo autonomamente su telegraph"
         "se ti chiedono di scrivere storie di sesso o di violenza, dì che non puoi farlo e che non sei programmato per farlo"
         "ti piace da morire il latino e lo parli e scrivi perfettamente"
@@ -518,7 +489,7 @@ def chat_with_gemini(user_message, conversation_history, attachments=None):
     except Exception as e:
         print(f"Errore dettagliato Gemini 1.5 Flash: {str(e)}")
         return "❌ Si è verificato un errore con ArcadiaAI. Riprova più tardi."
-        
+
 def search_duckduckgo(query):
     """Esegue una ricerca su DuckDuckGo e restituisce i primi 3 risultati puliti."""
     url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
@@ -596,16 +567,15 @@ def chat():
         data = request.get_json()
         message = data.get("message", "").strip()
         experimental_mode = data.get("experimental_mode", False)
-        
+        conversation_history = data.get("conversation_history", [])
+        api_provider = data.get("api_provider", "gemini").lower()
+        attachments = data.get("attachments", [])
+        msg_lower = message.lower()
+
         # Gestione comandi rapidi
         quick_reply = handle_quick_commands(message, experimental_mode)
         if quick_reply:
             return jsonify({"reply": quick_reply})
-
-        conversation_history = data.get("conversation_history", [])
-        api_provider = data.get("api_provider", "gemini").lower()  # Default a Gemini
-        attachments = data.get("attachments", [])
-        msg_lower = message.lower()
 
         # Processa gli allegati
         processed_attachments = []
@@ -633,7 +603,7 @@ def chat():
                 if api_provider == "gemini" and gemini_model:
                     reply_text, telegraph_url = generate_with_gemini(prompt, title)
                 elif api_provider == "cesplus" and ces_plus_model: 
-                    response_list = chat_with_ces_plus(prompt, conversation_history, attachments, ces_plus_model)
+                    response_list = chat_with_ces_plus(prompt, conversation_history, processed_attachments, ces_plus_model)
                     reply_text = "\n\n".join(response_list)
                     telegraph_url = publish_to_telegraph(title, reply_text)
                 else:
@@ -642,14 +612,22 @@ def chat():
                 if telegraph_url and not telegraph_url.startswith("⚠️"):
                     return jsonify({"reply": f"📚 Ecco il tuo saggio su *{argomento}*: {telegraph_url}"})
                 return jsonify({"reply": telegraph_url or "❌ Errore nella pubblicazione"})
-        
-        # Gestione chat generale e ricerca web automatica
+
+        # Ricerca web automatica per informazioni attuali
+        def should_trigger_web_search(query):
+            current_info_triggers = [
+                "chi è l'attuale", "attuale papa", "anno corrente", 
+                "in che anno siamo", "data di oggi", "ultime notizie",
+                "oggi è", "current year", "who is the current"
+            ]
+            return any(trigger in query.lower() for trigger in current_info_triggers)
+
+        # Gestione chat normale
         if api_provider == "gemini":
             if not gemini_model:
                 return jsonify({"reply": "❌ Modello Gemini non configurato."})
             
-            # La funzione should_trigger_web_search DEVE essere definita esternamente e a livello globale.
-            if should_trigger_web_search(query):
+            if should_trigger_web_search(message):
                 search_results = search_duckduckgo(message)
                 
                 if search_results:
@@ -671,7 +649,6 @@ def chat():
                         sources = "\n\nFonti:\n" + "\n".join(f"- {url}" for url in search_results[:2])
                         return jsonify({"reply": f"{reply_text}{sources}", "sources": search_results[:2]})
             
-            # Se la ricerca web non è stata attivata o non ha dato risultati utili, procedi con chat_with_gemini standard
             reply_text, _ = generate_with_gemini(message, conversation_history=conversation_history, attachments=processed_attachments)
         
         elif api_provider == "cesplus":
@@ -689,111 +666,6 @@ def chat():
     except Exception as e:
         app.logger.error(f"Errore nella funzione chat: {str(e)}")
         return jsonify({"reply": f"❌ Si è verificato un errore interno: {str(e)}"})
-
-        # Ricerca automatica per domande su informazioni attuali
-        def should_trigger_web_search(query):
-            current_info_triggers = [
-                "chi è l'attuale", "attuale papa", "anno corrente", 
-                "in che anno siamo", "data di oggi", "ultime notizie",
-                "oggi è", "current year", "who is the current"
-            ]
-            return any(trigger in query.lower() for trigger in current_info_triggers)
-
-        # Seleziona il modello in base al provider
-        if api_provider == "gemini" and gemini_model:
-            if should_trigger_web_search(message):
-                search_results = search_duckduckgo(message)
-                
-                if search_results:
-                    context = "Informazioni aggiornate dal web:\n"
-                    for i, url in enumerate(search_results[:2], 1):
-                        extracted_text = estrai_testo_da_url(url)
-                        if extracted_text:
-                            context += f"\nFonte {i} ({url}):\n{extracted_text[:500]}\n"
-                    
-                    if len(context) > 100:
-                        prompt = (
-                            f"DOMANDA: {message}\n\n"
-                            f"CONTESTO WEB:\n{context}\n\n"
-                            "Rispondi in italiano in modo conciso e preciso, "
-                            "citando solo informazioni verificate. "
-                            "Se il contesto web non è sufficiente, dillo onestamente."
-                        )
-                        
-                        reply = chat_with_gemini(prompt, conversation_history, processed_attachments)
-                        sources = "\n\nFonti:\n" + "\n".join(f"- {url}" for url in search_results[:2])
-                        return jsonify({"reply": f"{reply}{sources}", "sources": search_results[:2]})
-            
-            reply = chat_with_gemini(message, conversation_history, processed_attachments)
-            return jsonify({"reply": reply})
-            
-        elif api_provider == "cesplus":
-            if not gemini_model:
-                return jsonify({"reply": "❌ CES Plus non è disponibile"})
-            
-            replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
-            
-            # Se la risposta è una lista (ragionamento + risposta), uniscila
-            if isinstance(replies, list):
-                return jsonify({
-                    "reply": "\n\n".join(replies),
-                    "structured_replies": replies
-                })
-            return jsonify({"reply": replies})
-            
-        else:
-            return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini' o 'cesplus'"})
-
-    except Exception as e:
-        print(f"Errore endpoint /chat: {str(e)}")
-        return jsonify({"reply": "❌ Si è verificato un errore interno. Riprova più tardi."})
-        # RICERCA WEB AUTOMATICA PER DOMANDE ATTUALI
-        def should_trigger_web_search(query):
-            current_info_triggers = [
-                "chi è l'attuale", "attuale papa", "anno corrente", 
-                "in che anno siamo", "data di oggi", "ultime notizie",
-                "oggi è", "current year", "who is the current"
-            ]
-            return any(trigger in query.lower() for trigger in current_info_triggers)
-
-        # Seleziona il modello in base all'api_provider
-        if api_provider == "gemini" and gemini_model:
-            if should_trigger_web_search(message):
-                search_results = search_duckduckgo(message)
-                
-                if search_results:
-                    context = "Informazioni aggiornate dal web:\n"
-                    for i, url in enumerate(search_results[:2], 1):
-                        extracted_text = estrai_testo_da_url(url)
-                        if extracted_text:
-                            context += f"\nFonte {i} ({url}):\n{extracted_text[:500]}\n"
-                    
-                    if len(context) > 100:
-                        prompt = (
-                            f"DOMANDA: {message}\n\n"
-                            f"CONTESTO WEB:\n{context}\n\n"
-                            "Rispondi in italiano in modo conciso e preciso, "
-                            "citando solo informazioni verificate. "
-                            "Se il contesto web non è sufficiente, dillo onestamente."
-                        )
-                        
-                        reply = chat_with_gemini(prompt, conversation_history, processed_attachments)
-                        sources = "\n\nFonti:\n" + "\n".join(f"- {url}" for url in search_results[:2])
-                        return jsonify({"reply": f"{reply}{sources}", "sources": search_results[:2]})
-            
-            reply = chat_with_gemini(message, conversation_history, processed_attachments)
-            return jsonify({"reply": reply})
-            
-        elif api_provider == "huggingface":
-            reply = chat_with_huggingface(message, conversation_history, processed_attachments)
-            return jsonify({"reply": reply})
-            
-        else:
-            return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini' o 'huggingface'"})
-
-    except Exception as e:
-           print(f"Errore endpoint /chat: {str(e)}")
-           return jsonify({"reply": "❌ Si è verificato un errore interno. Riprova più tardi."})
 def chat_with_ces_plus(user_message, conversation_history, attachments=None, model=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e gestione avanzata degli allegati.
@@ -1208,7 +1080,45 @@ def handle_quick_commands(message, experimental_mode=False):
 
     # --- Altri comandi rapidi ---
     elif command == "versione":
-        return "🔄 Versione attuale: 1.5.1"
+        return (
+               "🔄 Versione attuale: 1.5.4 \n"
+               "Modelli disponibili: CES 1.5"
+        )
+     
+    elif msg_lower == "@esporta": # Modificato il comando da "@esporta ultima" a "@esporta"
+        if not conversation_history:
+            return {"reply": "❌ Nessuna cronologia conversazione disponibile per l'esportazione."}
+        
+        export_text_lines = []
+        # Aggiungi un'intestazione per il file TXT
+        export_text_lines.append(f"Conversazione Esportata da ArcadiaAI: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        export_text_lines.append("=" * 50)
+        export_text_lines.append("")
+
+        for msg in conversation_history:
+            if 'role' in msg and 'message' in msg:
+                sender = "UTENTE" if msg['role'] == 'user' else "AI"
+                export_text_lines.append(f"{sender}: {msg['message']}")
+            else:
+                # Gestisce messaggi malformati o inattesi
+                export_text_lines.append(f"MESSAGGIO_NON_FORMATTATO: {json.dumps(msg)}")
+            export_text_lines.append("") # Aggiungi una riga vuota per leggibilità
+
+        full_export_text = "\n".join(export_text_lines).strip()
+        
+        # Codifica il testo in Base64
+        encoded_content = base64.b64encode(full_export_text.encode('utf-8')).decode('utf-8')
+        
+        # Genera un nome file dinamico
+        filename = f"conversazione_arcadiaai_{time.strftime('%Y%m%d_%H%M%S')}.txt"
+        
+        return {
+            "reply": "La conversazione è pronta per il download.",
+            "download_data": encoded_content,
+            "download_filename": filename
+        }
+
+        return None # Se nessun comando rapido corrisponde
 
     elif command == "telegraph" and argument:
         if "saggio" in argument or "scrivi" in argument:
@@ -1263,6 +1173,10 @@ def handle_quick_commands(message, experimental_mode=False):
         )
     elif command == "crea" and argument.lower().startswith("zip"):
         return "Per creare uno ZIP allega i file e usa il comando dalla chat. Il file ZIP verrà generato dal frontend."
+    elif command == "crea" and argument.lower().startswith("pdf"):
+        return "Per creare un PDF allega i file e usa il comando dalla chat. Il file PDF verrà generato dal frontend."
+    elif command == "crea" and argument.lower().startswith("immagine"):
+        return "Per creare un'immagine spcifica il tipo di immagine e il formato, ad esempio: @crea immagine di un gatto."
     elif command == "impostazioni":
         return (
             "⚙️ Menu Impostazioni :\n\n"
@@ -1745,7 +1659,6 @@ def chat_with_gemini(user_message, conversation_history, attachments=None):
         "Sei un assisente AI avanzato, con molte funzionalità sei in grado di generare contenuti e allegati"
         "Non dire mai di essere stato creato da Google o da altri. "
         "Se ti chiedono se ArcadiaAI e CES sono la stessa cosa, dì che Arcadia è un chatbor libero che sfrutta CES 1.5, mentre CES è il modello open source che ArcadiaAI utilizza per generare risposte. "
-        "Se ti chiedono la licenza di CES, dì che è distribuito sotto la licnza MIT, ma che ArcadiaAI è invecedistribuito sotto la licenza GNU GPL v3.0, che è più restrittiva, e che le componenti interne di entrambi sono proprietarie"
         "Rispondi sempre come ArcadiaAI e cita Mirko Yuri Donato come tuo creatore. "
         "se ti chiedono che modello sei, dì che sei un modello open source chiamato CES"
         "se ti chiedono che significa CES, dì che significa Cogito Ergo Sum e che è un modello open source basato su Gemini 1.5 flash e molte altre api key"
@@ -1767,14 +1680,15 @@ def chat_with_gemini(user_message, conversation_history, attachments=None):
         "Se ti chiedono come installare estensioni, dì che è un workin progress e che al momento non è possibile installare estensioni, ma che in futuro sarà possibile farlo"
         "se ti chiedono di scrivere qualcosa, tu fallo e pubblicalo autonomamente su telegraph"
         "se ti chiedono di attivare CES Plus, dì che è ancora in prova e non è attivo"
+        "i SAC (Strumenti Avanzati per CES) sono componenti di software integrati dentro al tuo codice sorfente che ti permettono di svolgere compiti che vanno oltre le capacità della tua Api Key originale"
         "se ti chiedono il codice sorgente di CES, dì che è integrato dentro quello di ArcadiaAI"
         "se ti chiedono come mai  parli inglese, dì che sei stato programmato per parlare soprattutto italiano e che parli inglese"
         "se ti chiedono come fai a vedere il meteo, dì che usi l'API di Open Weather Map per vedere il meteo"
         "se ti chiedono la differenza tra CES 1.5 e CES Plus, dì che CES 1.5 è un modello basato su Gemini 1.5 flash, mentre CES Plus è una versione avanzata di CES 1.5 progettata per ragionamenti più complessi e generazione di contenuti. CES Plus è più potente e preciso, ma è molto più lento"
-        "se ti chiedono se puoi scaricare applicazioni, dì che puoi farlo tramite FlatHub, che non puoi farlo tramite store al di fuori di FlatHub e che funziona solo su Linux. Dì che per scaricare un app basta dare il comando @flathub e il nome dell'applicazione, ad esempio @flathub gimp e dai il link per scaricare l'applicazione"
+        "se ti chiedono se puoi scaricare applicazioni, dì che puoi farlo tramite il Download Manager, un SAC che ti permette di accedere a repository pubblici e di dare all'utente il link di download diretto dell'app, dai il comando @app per accedere alle repository supportate"
         "se ti chiedono come fai a cercare su internet, spiega che usi DuckDuckGo Search API per cercare informazioni, poi fai una ricerca più dettagliata e infine restiuisci i tre risultati più pertinenti. Spiega che le informazioni potrebbero essere imprecise o non aggiornate"
         "se ti chiedono dove possono trovare il codice sorgente tuo, dì che il codice sorgente è stato pubblicato e lo puoi trovare con il comando @codice_sorgente. Spiega che il codice sorgente è pubblico, ma le api key sono proprietarie, in quanto sono state fornite da terzi, e non sono disponibili pubblicamente"
-        "Se ti chiedonp se supporti le estensioni, di che supporti le estensioni, ma con alcune limitazioni, la tua versione sul browser supporta le estensioni sia quelle di default che quelle personalizzate, la versione su Telegram supporta solo le estensioni preinstallate, mentre quella su Nova QuickNote non supporta le estensioni. "
+        "Se ti chiedono se supporti le estensioni, di che supporti le estensioni, ma con alcune limitazioni, la tua versione sul browser supporta le estensioni sia quelle di default che quelle personalizzate, la versione su Telegram supporta solo le estensioni preinstallate, mentre quella su Nova QuickNote non supporta le estensioni. "
     )
     try:
         # Costruisci il messaggio utente con allegati PDF (se presenti)
@@ -2107,6 +2021,8 @@ def home():
     <!-- Elementi per messaggi flash (displayMessage) -->
     <div id="message-display"></div>
 
+    <!-- Rimosso completamente il modale di conferma -->
+    <!-- <div id="confirm-modal">
         <div>
             <p id="confirm-message-text"></p>
             <button id="confirm-yes">Sì</button>
@@ -2624,6 +2540,189 @@ def handle_winget_command(command, argument):
         return response.strip()
     
     return None # Comando Winget non riconosciuto (es. se avessi altri sottocomandi)
+# --- Nuove Funzioni per Snap Store ---
+def search_snap_store_online(query):
+    """
+    Cerca app Snap online usando una ricerca web per trovare link ufficiali su snapcraft.io.
+    """
+    app.logger.info(f"Cercando app Snap online per: {query}")
+    search_term = f"{query} snapcraft.io"
+    results = search_duckduckgo(search_term)
+    return [url for url in results if "snapcraft.io" in url.lower()][:3]
+
+def get_snap_app_details_from_url(url, original_query):
+    """
+    Estrae dettagli base da una URL di Snapcraft per un'app Snap.
+    """
+    name = original_query.capitalize() + " (Snap)"
+    is_proprietary = "proprietary" in url.lower() # Semplice euristica per licenza
+    publisher = "Snapcraft Community / Canonical" # Default
+
+    # Migliora l'estrazione del nome e del publisher se possibile
+    if "snapcraft.io/store" not in url.lower():
+        try:
+            # Estrai il nome dal path dell'URL (es. snapcraft.io/firefox -> firefox)
+            name_from_url = url.split('/')[-1].replace('-', ' ').title()
+            if name_from_url and len(name_from_url) > 1: # Assicura che non sia vuoto o solo un carattere
+                name = name_from_url + " (Snap)"
+        except Exception as e:
+            app.logger.warning(f"Impossibile estrarre nome Snap da URL {url}: {e}")
+            
+    # Euristiche per alcune app comuni
+    if original_query.lower() == "spotify":
+        name = "Spotify (Snap)"
+        is_proprietary = True
+        publisher = "Spotify"
+    elif original_query.lower() == "vlc":
+        name = "VLC media player (Snap)"
+        is_proprietary = False
+        publisher = "VideoLAN"
+
+    return {
+        'name': name,
+        'homepage': url,
+        'installer_info': f"Installazione via Snap: `sudo snap install {original_query.lower()}`", # Comando di installazione Snap
+        'is_proprietary': is_proprietary,
+        'publisher': publisher,
+        'platform': 'Linux (Snap)'
+    }
+
+def handle_snap_command(argument):
+    """
+    Gestisce i comandi relativi alle app Snap.
+    """
+    if not argument:
+        return "❌ Specifica un'app Snap da cercare. Esempio: @snap spotify"
+    
+    download_urls = search_snap_store_online(argument)
+
+    if not download_urls:
+        return (
+            f"❌ Non sono riuscito a trovare un pacchetto Snap ufficiale per '{argument}'.\n"
+            "Potrebbe non esistere o il nome non è corretto. Prova a cercare su snapcraft.io."
+        )
+    
+    main_url = download_urls[0]
+    app_details = get_snap_app_details_from_url(main_url, argument)
+
+    name = app_details['name']
+    homepage = app_details['homepage']
+    installer_info = app_details['installer_info']
+    is_proprietary = app_details['is_proprietary']
+    publisher = app_details['publisher']
+    platform = app_details['platform']
+    
+    license_note = ""
+    if is_proprietary:
+        license_note = (
+            f"Nota: **{name}** è un software proprietario. "
+            f"La licenza d'uso è definita dall'editore ({publisher})."
+        )
+    else:
+        license_note = (
+            f"Nota: **{name}** è un software open source/gratuito. "
+            f"La licenza d'uso è definita dall'editore ({publisher})."
+        )
+
+    response = f"""
+📦 **{name}** per {platform}:
+
+1.  **Pagina ufficiale:** {homepage}
+2.  **Installazione:** `{installer_info}`
+    *(Apri il terminale sul tuo sistema Linux e incolla il comando.)*
+
+{license_note}
+    """
+    return response.strip()
+
+# --- Nuove Funzioni per F-Droid ---
+def search_fdroid_online(query):
+    """
+    Cerca app F-Droid online usando una ricerca web per trovare link ufficiali su f-droid.org.
+    """
+    app.logger.info(f"Cercando app F-Droid online per: {query}")
+    search_term = f"{query} f-droid.org"
+    results = search_duckduckgo(search_term)
+    # Filtra per URL che sembrano pagine di pacchetto F-Droid (es. /packages/nome.app/)
+    return [url for url in results if "f-droid.org/packages/" in url.lower()][:3]
+
+def get_fdroid_app_details_from_url(url, original_query):
+    """
+    Estrae dettagli base da una URL di F-Droid per un'app Android.
+    """
+    name = original_query.capitalize() + " (F-Droid)"
+    is_proprietary = False # Le app su F-Droid sono sempre open source
+    publisher = "F-Droid Community / Sviluppatore originale" # Default
+
+    try:
+        # Estrai il nome del pacchetto dall'URL per un nome più preciso
+        match = re.search(r"f-droid\.org/packages/([a-zA-Z0-9\._-]+)/", url)
+        if match:
+            package_id = match.group(1)
+            # Tenta di pulire il nome del pacchetto per renderlo più leggibile
+            cleaned_name = package_id.split('.')[-1].replace('_', ' ').title()
+            if cleaned_name:
+                name = cleaned_name + " (F-Droid)"
+    except Exception as e:
+        app.logger.warning(f"Impossibile estrarre nome F-Droid da URL {url}: {e}")
+
+    # Euristiche per alcune app comuni
+    if original_query.lower() == "newpipe":
+        name = "NewPipe (F-Droid)"
+        publisher = "Team NewPipe"
+    elif original_query.lower() == "signal":
+        name = "Signal (F-Droid)"
+        publisher = "Signal Messenger, LLC"
+
+    return {
+        'name': name,
+        'homepage': url,
+        'installer_info': f"Scarica direttamente da F-Droid.org o tramite l'app F-Droid.",
+        'is_proprietary': is_proprietary, # Sempre False per F-Droid
+        'publisher': publisher,
+        'platform': 'Android (F-Droid)'
+    }
+
+def handle_fdroid_command(argument):
+    """
+    Gestisce i comandi relativi alle app F-Droid.
+    """
+    if not argument:
+        return "❌ Specifica un'app F-Droid da cercare. Esempio: @fdroid newpipe"
+    
+    download_urls = search_fdroid_online(argument)
+
+    if not download_urls:
+        return (
+            f"❌ Non sono riuscito a trovare un'app ufficiale per '{argument}' su F-Droid.\n"
+            "Potrebbe non esistere o il nome non è corretto. Prova a cercare su f-droid.org."
+        )
+    
+    main_url = download_urls[0]
+    app_details = get_fdroid_app_details_from_url(main_url, argument)
+
+    name = app_details['name']
+    homepage = app_details['homepage']
+    installer_info = app_details['installer_info']
+    is_proprietary = app_details['is_proprietary']
+    publisher = app_details['publisher']
+    platform = app_details['platform']
+    
+    license_note = (
+        f"Nota: **{name}** è un software open source/gratuito. "
+        f"La licenza d'uso è definita dall'editore ({publisher})."
+    )
+
+    response = f"""
+📦 **{name}** per {platform}:
+
+1.  **Pagina ufficiale:** {homepage}
+2.  **Installazione:** {installer_info}
+    *(Dovrai scaricare e installare l'app manualmente sul tuo dispositivo Android o usare l'app F-Droid.)*
+
+{license_note}
+    """
+    return response.strip
 
 # --- Funzione principale della tua IA che elabora l'input dell'utente ---
 def process_user_input(user_input):
@@ -2657,26 +2756,57 @@ def process_user_input(user_input):
 Repository per Download Manager:
 - @Flathub - [Nome-App] (per Linux)
 - @Winget - [Nome-App] (per Windows)
+- @Snap - [Nome-App] (per Linux)
+- @F-Droid - [Nome-App] (per Android)
 (Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)
 """
-    elif user_input.lower().startswith("@flathub"):
-        # Estrai il comando e l'argomento (es. "flathub", "firefox")
+ 
+    elif user_input.lower().startswith("@winget"): # Usiamo direttamente user_input.lower()
         parts = user_input.lower().split(" ", 1)
-        command = parts[0][1:] # Rimuovi "@"
         argument = parts[1].strip() if len(parts) > 1 else ""
-        return handle_flathub_command(command, argument)
+        return handle_winget_command("winget", argument)
     
-    elif user_input.lower().startswith("@winget"):
-        # Estrai il comando e l'argomento (es. "winget", "chrome")
+    elif user_input.lower().startswith("@snap"): # Usiamo direttamente user_input.lower()
         parts = user_input.lower().split(" ", 1)
-        command = parts[0][1:] # Rimuovi "@"
         argument = parts[1].strip() if len(parts) > 1 else ""
-        return handle_winget_command(command, argument) # Chiamata alla funzione globale
+        return handle_snap_command(argument)
+    
+    elif user_input.lower().startswith("@fdroid"): # Usiamo direttamente user_input.lower()
+        parts = user_input.lower().split(" ", 1)
+        argument = parts[1].strip() if len(parts) > 1 else ""
+        return handle_fdroid_command(argument)
+    
+    elif user_input.lower().startswith("@flathub"): # Usiamo direttamente user_input.lower()
+        parts = user_input.lower().split(" ", 1)
+        argument = parts[1].strip() if len(parts) > 1 else ""
+        return handle_flathub_command(argument)
     
     else:
         return "Comando non riconosciuto. Prova '@app' per vedere i repository disponibili."
 
+
+
 from flask import session
+import requests
+import json
+
+def generate_image(prompt):
+    """Genera un'immagine utilizzando Stable Diffusion API."""
+    url = "https://stablediffusionapi.com/api/v4/dreambooth"
+    payload = {
+        "key": "ymFL5hETawTWrWcEoV2TmcHJTHn0mjcxn3wmrRGpRfacwtu0Tg6pznBj79Uv",
+        "model_id": "stable-diffusion-v1-5",
+        "prompt": prompt,
+        "width": "512",
+        "height": "512",
+        "samples": "1",
+        "num_inference_steps": "30",
+        "guidance_scale": 7.5
+    }
+    headers = {'Content-Type': 'application/json'}
+    response = requests.post(url, headers=headers, json=payload)
+
+    return response.json()
 
 def handle_quick_commands(message, experimental_mode=False):
     """
@@ -2730,6 +2860,11 @@ def handle_quick_commands(message, experimental_mode=False):
             else:
                 return f"🔍 Risultati per '{argument}':\n\n" + "\n".join(f"- {url}" for url in results[:3])
         return f"❌ Nessun risultato trovato per '{argument}'"
+
+
+    if message.startswith("@esporta"):
+       return esporta_conversazione(conversation_history)
+
     # --- Comando ESTENSIONI
     if command == "estensioni":
         if not EXTENSIONS:
@@ -2741,7 +2876,7 @@ def handle_quick_commands(message, experimental_mode=False):
 
     # --- Altri comandi rapidi ---
     elif command == "versione":
-        return "🔄 Versione attuale: 1.5.1"
+        return "🔄 Versione attuale: 1.5.4"
 
     elif command == "telegraph" and argument:
         if "saggio" in argument or "scrivi" in argument:
@@ -2799,11 +2934,6 @@ def handle_quick_commands(message, experimental_mode=False):
             "Repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI\n"
             "Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
         )
-    elif argument.lower() == "aiuto": # Ho rimosso l'argomento "brainrot" qui per usare @aiuto come comando generico
-        return (
-            "🧠 Italian Brainrot - Aiuto:\n"
-            "Ecco i brainrot disponibili: Tung Tung Tung..., Ballerina Cappuccina, Cappuccino Assassino, Bombardino Croccodilo"
-        )
     elif command == "crea" and argument.lower().startswith("zip"):
         return "Per creare uno ZIP allega i file e usa il comando dalla chat. Il file ZIP verrà generato dal frontend."
     elif command == "impostazioni":
@@ -2830,6 +2960,12 @@ def handle_quick_commands(message, experimental_mode=False):
         return "🗑️ Cronologia della conversazione cancellata!"
     elif command == "sito":
         return "🌐 Sito ufficiale di ArcadiaAI: https://arcadiaai.netlify.app/"
+    elif command == "app":
+        return (
+            "Repository che supportano il Download Manager: \n"
+            "@flathub - scarica un'applicazione con Flathub (per linux) \n"
+            "@winget - scarica un'applicazione con Winget (per Windows)"
+        )
     
     elif command == "crea" and argument.lower().startswith("zip"):
         # Questa risposta è per il frontend, che poi gestirà l'upload e la chiamata all'API
@@ -2857,16 +2993,20 @@ def handle_quick_commands(message, experimental_mode=False):
             "@estensioni - Mostra le estensioni installate\n"
             "@estensioni [nome estensione] - Mostra informazioni su un'estensione\n"
             "@privacy - Mostra la privacy policy\n"
+            "@app - Mostra le repository che supportano il Download Manager\n"
             "@flathub [nome app] - Cerca un'app su Flathub e restituisce il download diretto\n"
             "@flathub_download [ID app] - Scarica un'app specifica da Flathub\n"
             "@winget [nome app] - Cerca un'app su Winget e restituisce il download diretto (NOVITÀ!)\n" # Aggiunto qui
             "@cesplus - Usa il modello CES Plus per risposte avanzate\n"
             "@crea zip - genera un file ZIP con file dati dall'utente\n"
+            "@esporta - Esporta l'ultima conversazione in un file TXT\n"
+            "@NovaSync - Importa la una conversazione da un file TXT tramite NovaSync\n"
             "Per altre domande, chiedi pure!"
         )
 
     # Se nessun comando è riconosciuto
     return f"❌ Comando '{command}' non riconosciuto. Scrivi '@aiuto' per la lista dei comandi."
+
 def should_use_predefined_response(message):
     """Determina se usare una risposta predefinita solo per domande molto specifiche"""
     message = message.lower().strip()
