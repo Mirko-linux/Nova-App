@@ -1,6 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import zipfile
 import os
@@ -10,12 +9,14 @@ import time
 
 app = FastAPI()
 
-# Configura CORS per permettere richieste dal tuo frontend
-# AGGIORNATO: Ora include l'URL esatto del tuo chatbot ArcadiaAI
+# --- CONFIGURAZIONE CORS ---
+# Inserisci qui l'URL esatto del tuo frontend ArcadiaAI su Render
+# Assicurati che sia https://arcadiaai.onrender.com
 origins = [
-    "http://localhost:8000",  # Per i test in locale
-    "https://arcadiaai.onrender.com", # <--- QUESTO È L'URL CORRETTO DEL TUO CHATBOT
-    # Aggiungi altri domini se necessario
+    "http://localhost:8000",  # Per i test in locale (comune)
+    "http://192.168.178.52:10000", # <--- NUOVO: Indirizzo IP locale per i tuoi test
+    "https://arcadiaai.onrender.com", # L'URL del tuo chatbot ArcadiaAI deployato
+    # Puoi aggiungere altre origini se necessario
 ]
 
 app.add_middleware(
@@ -25,66 +26,76 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# --- FINE CONFIGURAZIONE CORS ---
+
 
 # Cartella per gli ZIP temporanei
+# Render riavvia periodicamente i servizi gratuiti, quindi questa cartella
+# verrà ricreata ad ogni riavvio, pulendo automaticamente i vecchi ZIP.
 ZIP_FOLDER = "temp_zips"
 os.makedirs(ZIP_FOLDER, exist_ok=True)
 
-# Pulisci vecchi file (esegue una volta per ogni richiesta)
+# La funzione clean_old_files() è utile, ma in un ambiente serverless/free tier
+# dove i servizi vanno in sleep/si riavviano, la pulizia dei file temporanei
+# è gestita automaticamente dal ciclo di vita del container.
+# La lasciamo comunque, ma il suo impatto potrebbe essere limitato.
 def clean_old_files():
     now = time.time()
-    # Scorre tutti i file nella cartella ZIP_FOLDER
     for filename in os.listdir(ZIP_FOLDER):
         file_path = os.path.join(ZIP_FOLDER, filename)
-        # Controlla se il file esiste e se è più vecchio di 24 ore (86400 secondi)
+        # 86400 secondi = 24 ore
         if os.path.exists(file_path) and os.path.getmtime(file_path) < now - 86400:
             try:
-                os.remove(file_path) # Rimuove il file
+                os.remove(file_path)
                 print(f"Pulito file vecchio: {filename}")
             except Exception as e:
                 print(f"Errore nella pulizia del file {filename}: {e}")
 
+
 @app.post("/create-zip/")
 async def create_zip(files: list[UploadFile] = File(...)):
-    # Pulisce i file vecchi ogni volta che viene chiamato l'endpoint per assicurare spazio
+    # Esegui la pulizia all'inizio di ogni richiesta di creazione ZIP
+    # per mantenere la directory pulita.
     clean_old_files()
     
-    # Controlla il numero di file
     if len(files) > 10:
-        raise HTTPException(status_code=400, detail="Troppi file (max 10).")
+        raise HTTPException(status_code=400, detail="Errore: Troppi file (massimo 10 supportati).")
     
-    zip_id = str(uuid.uuid4()) # Genera un ID univoco per il file ZIP
-    zip_path = os.path.join(ZIP_FOLDER, f"{zip_id}.zip") # Costruisce il percorso del file ZIP
+    zip_id = str(uuid.uuid4())
+    zip_path = os.path.join(ZIP_FOLDER, f"{zip_id}.zip")
 
     try:
-        # Crea il file ZIP e scrive i contenuti dei file caricati
         with zipfile.ZipFile(zip_path, "w") as zipf:
             for file in files:
-                # Controlla la dimensione massima per ogni singolo file (5MB)
-                if file.size > 5 * 1024 * 1024:
-                    print(f"File {file.filename} ignorato: troppo grande (>5MB).")
-                    continue # Salta questo file e passa al prossimo
-                contents = await file.read() # Legge il contenuto del file caricato
-                zipf.writestr(file.filename, contents) # Aggiunge il file allo ZIP
+                # Salta i file troppo grandi per evitare problemi di memoria o timeout
+                if file.size > 5 * 1024 * 1024:  # Limite di 5MB per singolo file
+                    print(f"Avviso: File '{file.filename}' ignorato perché supera i 5MB.")
+                    continue
+                contents = await file.read()
+                zipf.writestr(file.filename, contents)
         
-        # Restituisce l'URL per il download del file ZIP
+        # Restituisce l'URL relativo per il download del file ZIP
         return {"download_url": f"/download-zip/{zip_id}"}
     except Exception as e:
-        # Cattura qualsiasi errore durante la creazione dello ZIP e restituisce un errore HTTP
-        print(f"Errore durante la creazione ZIP: {e}")
-        raise HTTPException(status_code=500, detail=f"Errore durante la creazione del file ZIP: {str(e)}")
+        print(f"Errore critico durante la creazione ZIP: {e}")
+        raise HTTPException(status_code=500, detail=f"Si è verificato un errore interno durante la creazione del file ZIP: {str(e)}")
 
 @app.get("/download-zip/{zip_id}")
 async def download_zip(zip_id: str):
-    zip_path = os.path.join(ZIP_FOLDER, f"{zip_id}.zip") # Costruisce il percorso del file ZIP
+    zip_path = os.path.join(ZIP_FOLDER, f"{zip_id}.zip")
     
-    # Controlla se il file ZIP esiste
     if not os.path.exists(zip_path):
-        raise HTTPException(status_code=404, detail="File ZIP non trovato o scaduto.")
-        
-    # Restituisce il file ZIP per il download
+        raise HTTPException(status_code=404, detail="Errore: File ZIP non trovato o il link è scaduto.")
+    
+    # Assicurati che il percorso del file sia all'interno della cartella ZIP_FOLDER
+    # per prevenire attacchi di path traversal.
+    if not os.path.abspath(zip_path).startswith(os.path.abspath(ZIP_FOLDER)):
+        raise HTTPException(status_code=400, detail="Errore: Percorso file non valido.")
+
+    # Il nome del file per il download sarà "archive.zip"
     return FileResponse(path=zip_path, filename="archive.zip", media_type="application/zip")
 
-# Monta la cartella degli ZIP come statica (questo non è strettamente necessario per il download diretto,
-# ma non causa problemi e può essere utile per altre logiche se volessi servire i file in modo diverso)
-app.mount("/temp_zips", StaticFiles(directory=ZIP_FOLDER), name="temp_zips")
+# --- ENDPOINT DI BENVENUTO (FONDAMENTALE per verificare che il servizio sia attivo) ---
+@app.get("/")
+async def root():
+    return {"message": "Servizio di creazione e download ZIP attivo!"}
