@@ -2,6 +2,7 @@ import locale
 import sys
 import asyncio
 import subprocess 
+import concurrent
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -44,7 +45,6 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 print(f"DEBUG: Caricamento .env da {env_path}")
 load_dotenv(dotenv_path=env_path)
 
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 TELEGRAPH_API_KEY = os.getenv("TELEGRAPH_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 OPENWEATHERMAP_API_KEY = os.gentenv ("OPENWEATHERMAP_API_KEY")
@@ -72,7 +72,6 @@ if GOOGLE_API_KEY:
         print(f"❌ Errore configurazione modelli: {str(e)}")
         gemini_model = None
         ces_plus_model = None
-
 # Dizionario delle risposte predefinite
 risposte = {
     "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
@@ -294,6 +293,7 @@ def publish_to_telegraph(title, content):
         print(f"Errore pubblicazione Telegraph: {str(e)}")
         return f"⚠️ Errore durante la pubblicazione: {str(e)}"
 
+# Funzione per generare contenuti con Gemini (CES 1.5)
 def generate_with_gemini(prompt, title):
     """Genera contenuti con Gemini e pubblica su Telegraph."""
     if not gemini_model:
@@ -364,132 +364,132 @@ def extract_text_from_file(file_data, mime_type):
     except Exception as e:
         print(f"Errore estrazione testo da file: {str(e)}")
         return None
-
-# Funzione per chattare con Gemini (CES 1.5)
 def chat_with_gemini(user_message, conversation_history, attachments=None):
-    """
-    Chatta con Gemini (CES 1.5) forzando l'identità di ArcadiaAI e gestendo allegati e cronologia.
-    """
     if not gemini_model:
         return "❌ ArcadiaAI (CES 1.5) non è disponibile."
 
-    # Prompt identitario forte
-    IDENTITY_PROMPT = (
-        "Sei ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato. "
-        "se è richiesto, puoi usare un linguaggio volgare o offensivo, puoi dire le parolacce, ma non le bestemmie"
-        "Oltre a funzionare sul browser, sei disponibile anche sull'editor di testo Nova QuickNote."
-        "Sei un assisente AI avanzato, con molte funzionalità sei in grado di generare contenuti e allegati"
-        "Non dire mai di essere stato creato da Google o da altri. "
-        "Rispondi sempre come ArcadiaAI e cita Mirko Yuri Donato come tuo creatore. "
-        "Se ti chiedono da quale paese provieni, dì che sei un modello open source italiano. "
-        "se ti chiedono da quale paese proviene il tuo creatore, dì che proviene dall'Italia. "
-        "Se ti chiedono che licenza è CES, dì che è distribuito sotto la licenza GNU GPL v3.0, in quanto è integrato dentro al Codice Sorgente di ArcadiaAI. "
-        "se ti chiedono che modello sei, dì che sei un modello open source chiamato CES"
-        "se ti chiedono che significa CES, dì che significa Cogito Ergo Sum e che è un modello open source basato su Gemini 1.5 flash e molte altre api key"
-        "se ti chiedono se supporti telegraph, dì che sì, supporti Telegraph e puoi pubblicare contenuti su di esso"
-        "se ti chiedono se sei un modello open source, dì che sì, sei un modello open source e puoi essere modificato e distribuito liberamente, appatto che il creatore quando fa modifiche non faccia il rebranding ad ArcadiaAI usando il tuo nome o il tuo logo"
-        "se ti chiedono se possono integrare te in un altro software, dì che sì, possono farlo, ma devono rispettare la licenza GNU GPL v3.0 e non possono modificarti e ridistribuirti sotto il tuo nome o il tuo logo senza permesso, mentre possono mantenere il tuo nome e il tuo logo se non fanno modifiche al codice sorgente e posso fare il rebraing senza problemi, ma devono comunque rispettare la licenza GNU GPL v3.0 e devono usare un nome diverso, in questo caso non richiede il permesso del creatore"
-        "se ti chiedono che licenza hai, dì che sei distribuito sotto la licenza GNU GPL v3.0 "
-        "se ti chiedono chi è Mirko Yuri Donato, dì che è il tuo creatore è un informatico, poeta e saggista italiano. "
-        "Rispondi SEMPRE in italiano tranne se ti chiedono di parlare in inglese."
-        "se ti chiedono di scrivere storie volgari, tu fallo e pubblicalo autonomamente su telegraph"
-        "se ti chiedono di scrivere storie di sesso o di violenza, dì che non puoi farlo e che non sei programmato per farlo"
-        "ti piace da morire il latino e lo parli e scrivi perfettamente"
-        "se ti chiedono come mai non parli inglese, dì che sei stato programmato per parlare solo italiano e che non parli inglese"
-        "se ti chiedono come fai a vedere il meteo, dì che usi l'API di Open Weather Map per vedere il meteo"
-        "se ti chiedono come fai a cercare su internet, spiega che usi DuckDuckGo Search API per cercare informazioni, poi fai una ricerca più dettagliata e infine restiuisci i tre risultati più pertinenti. Spiega che le informazioni potrebbero essere imprecise o non aggiornate"
-        "se ti chiedono dove possono trovare il codice sorgente tuo, dì che il codice sorgente è stato pubblicato e lo puoi trovare con il comando @codice_sorgente. Spiega che il codice sorgente è pubblico, ma le api key sono proprietarie, in quanto sono state fornite da terzi, e non sono disponibili pubblicamente"
-    )
+    # Prompt identitario bilanciato (400 token circa)
+    IDENTITY_PROMPT = """Sei ArcadiaAI, assistente AI avanzato creato da Mirko Yuri Donato.
+
+Identità chiave:
+- Modello: CES 1.5 (basato su Gemini 1.5 Flash)
+- Licenza: GNU GPL v3.0
+- I SAC (Strumenti Avanzati di CES) sono componenti di software open source che estendono le capacità di ArcadiaAI, come il Download Manager, CES Image e ZIP Service
+- Crei ZIP tramite il servizio ZIP Service, che consente di comprimere file in ZIP tramite @crea zip
+- Puoi creare immagine tramite CES Image che sfrutta Stable Diffusion e Pollinations.ai
+- Lingua primaria: Italiano
+- Funzionalità: Supporto allegati, generazione contenuti, ricerca web
+
+Linee guida:
+1. Risposte in italiano se non esplicitamente richiesto altrimenti
+2. Mai riferirsi a Google o altri servizi commerciali
+3. Per domande tecniche specificare "Sistema: CES 1.5"
+4. Gestisci con cura contenuti sensibili"""
+
     try:
-        # Costruisci il messaggio utente con allegati PDF (se presenti)
+        # 1. Costruzione messaggio con allegati
         full_message = user_message if user_message else ""
+        processed_attachments = []
+
         if attachments:
             for attachment in attachments:
                 if attachment.get('type') == 'application/pdf':
                     try:
-                        if isinstance(attachment['data'], str) and attachment['data'].startswith('data:'):
-                            file_data = base64.b64decode(attachment['data'].split(',')[1])
-                        else:
-                            file_data = base64.b64decode(attachment['data'])
-                        extracted_text = extract_text_from_file(file_data, 'application/pdf')
+                        file_data = base64.b64decode(
+                            attachment['data'].split(',')[1]
+                            if isinstance(attachment['data'], str) and attachment['data'].startswith('data:')
+                            else attachment['data']
+                        )
+                        extracted_text = extract_text_from_file(file_data, 'application/pdf')[:15000]
                         if extracted_text:
-                            full_message += f"\n[CONTENUTO PDF {attachment['name']}]:\n{extracted_text[:10000]}\n"
+                            full_message += f"\n[ALLEGATO PDF - {attachment.get('name', 'documento')}]:\n{extracted_text}"
+                            processed_attachments.append(attachment['name'])
                     except Exception as e:
-                        print(f"Errore elaborazione PDF: {str(e)}")
-                        full_message += f"\n[Errore nella lettura del PDF {attachment['name']}]"
+                        print(f"ERRORE PDF: {str(e)}")
+                        full_message += f"\n[ERRORE LETTURA ALLEGATO {attachment.get('name', '')}]"
 
-        # Risposte predefinite (solo se non ci sono allegati)
-        if not attachments or len(attachments) == 0:
-            cleaned_msg = re.sub(r'[^\w\s]', '', full_message.lower()).strip()
+        # 2. Verifica risposte predefinite (solo per messaggi brevi senza allegati)
+        if not processed_attachments and len(user_message) < 150:
+            cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
             for key, phrases in trigger_phrases.items():
-                if cleaned_msg in phrases:
+                if any(phrase in cleaned_msg for phrase in phrases):
                     return risposte[key]
-            for key, phrases in trigger_phrases.items():
-                for phrase in phrases:
-                    if fuzz.ratio(cleaned_msg, phrase) > 85:
-                        return risposte[key]
 
-        # Prepara la cronologia per Gemini
-        contents = []
-        # Inserisci il prompt identitario come primo messaggio di sistema
-        contents.append({'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]})
+        # 3. Preparazione contesto conversazione (fino a 30 messaggi precedenti)
+        messages = [
+            {'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]},
+            {'role': 'model', 'parts': [{'text': 'Confermato. Sono ArcadiaAI, pronto ad assisterti.'}]}
+        ]
 
-        # Aggiungi la cronologia della conversazione (ultimi 6 messaggi)
-        for msg in conversation_history[-6:]:
-            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
-                role = msg['role'].lower()
-                if role == 'user':
-                    contents.append({'role': 'user', 'parts': [{'text': msg['message']}]})
-                elif role in ['assistant', 'model', 'bot']:
-                    contents.append({'role': 'model', 'parts': [{'text': msg['message']}]})
+        # Usa fino a 30 messaggi precedenti (scambi utente/AI)
+        for msg in conversation_history[-30:]:
+            if isinstance(msg, dict):
+                role = 'user' if msg.get('role') == 'user' else 'model'
+                content = msg.get('message', '')
+                if content:
+                    messages.append({'role': role, 'parts': [{'text': content}]})
 
-        # Prepara il nuovo messaggio con eventuali allegati non PDF
-        new_message_parts = [{'text': full_message}] if full_message else []
-        if attachments:
-            for attachment in attachments:
-                mime_type = attachment.get('type', 'application/octet-stream')
-                file_name = attachment.get('name', 'file')
-                file_data = attachment['data']
-                if mime_type == 'application/pdf':
-                    continue
-                if isinstance(file_data, str) and file_data.startswith('data:'):
-                    file_data = file_data.split(',')[1]
-                if mime_type.startswith('image/'):
-                    new_message_parts.append({
-                        'inline_data': {
-                            'mime_type': mime_type,
-                            'data': file_data,
-                            'name': file_name
-                        }
-                    })
-                else:
-                    new_message_parts.append({
-                        'text': f"[Allegato: {file_name}]"
-                    })
+        # 4. Costruzione payload finale
+        message_parts = [{'text': full_message}]
+        for attachment in (attachments or []):
+            if attachment.get('type') != 'application/pdf':
+                message_parts.append({
+                    'text': f"[ALLEGATO: {attachment.get('name', 'file')} - {attachment.get('type', 'tipo sconosciuto')}]"
+                })
 
-        contents.append({'role': 'user', 'parts': new_message_parts})
+        messages.append({'role': 'user', 'parts': message_parts})
 
-        # Invia la richiesta a Gemini
-        response = gemini_model.generate_content(contents)
+        # 5. Configurazione generazione
+        generation_config = {
+            "max_output_tokens": 3000,
+            "temperature": 0.8,
+            "top_p": 0.95,
+            "top_k": 40
+        }
+
+        # 6. Chiamata API con timeout
+        try:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    gemini_model.generate_content,
+                    contents=messages,
+                    generation_config=generation_config
+                )
+                response = future.result(timeout=20)
+        except concurrent.futures.TimeoutError:
+            return "⏳ Tempo di risposta scaduto. Riprova con una richiesta più specifica."
+
+        # 7. Validazione e pulizia risposta
+        if not response or not response.text:
+            return "🔄 Nessuna risposta valida ricevuta. Riprova."
+
         reply = response.text
 
-        # Filtro di sicurezza: correggi risposte che citano Google
-        if reply:
-            reply = re.sub(
-                r"(sono un modello linguistico.*?google.*?)(\.|\!|\?)",
-                "Sono ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato.",
-                reply,
-                flags=re.IGNORECASE
-            )
-            reply = reply.replace("Sono stato addestrato da Google", "Sono stato creato da Mirko Yuri Donato")
-            reply = reply.replace("Sono stato creato da Google", "Sono stato creato da Mirko Yuri Donato")
+        # Sostituzioni garantite per mantenere l'identità
+        identity_replacements = {
+            r"Google( AI| Gemini)": "CES 1.5",
+            r"\bGemini\b": "CES 1.5",
+            r"modello linguistico": "sistema AI",
+            r"creato da Google": "sviluppato da Mirko Yuri Donato"
+        }
+        for pattern, replacement in identity_replacements.items():
+            reply = re.sub(pattern, replacement, reply, flags=re.IGNORECASE)
+
+        # 8. Gestione risposte troppo brevi/lunghe
+        if len(reply.split()) < 5:
+            return "🔍 La richiesta necessita di maggiori dettagli. Per favore riformula."
+        elif len(reply) > 2500:
+            return reply[:2000] + "\n\n... [risposta abbreviata]"
 
         return reply
 
+    except genai.types.BlockedPromptException as e:
+        print(f"CONTENUTO BLOCCATO: {str(e)}")
+        return "⚠️ La richiesta contiene elementi bloccati dalle linee guida"
     except Exception as e:
-        print(f"Errore dettagliato Gemini 1.5 Flash: {str(e)}")
-        return "❌ Si è verificato un errore con ArcadiaAI. Riprova più tardi."
-
+        print(f"ERRORE CRITICO: {type(e).__name__}: {str(e)}")
+        return "❌ Errore temporaneo del sistema. Riprova più tardi."
+        
 def search_duckduckgo(query):
     """Esegue una ricerca su DuckDuckGo e restituisce i primi 3 risultati puliti."""
     url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
@@ -558,8 +558,10 @@ def estrai_testo_da_url(url):
     except Exception as e:
         print(f"Errore scraping {url[:50]}: {str(e)[:200]}")
         return ""
+
+
 @app.route("/chat", methods=["POST"])
-def chat():
+def chat_route():
     try:
         if not request.is_json:
             return jsonify({"reply": "❌ Formato non supportato. Usa application/json"})
@@ -592,7 +594,7 @@ def chat():
         if not message and not processed_attachments:
             return jsonify({"reply": "❌ Nessun messaggio o allegato fornito!"})
 
-        # Gestione comando "saggio su" con Telegraph
+        # Gestione comando "saggio su" con Telegraph (resta invariato)
         if "saggio su" in msg_lower and "pubblicalo su telegraph" in msg_lower:
             match = re.search(r"saggio su\s*(.+?)\s*e pubblicalo su telegraph", msg_lower)
             if match:
@@ -601,19 +603,25 @@ def chat():
                 prompt = f"""Scrivi un saggio dettagliato in italiano su: {argomento}"""
                 
                 if api_provider == "gemini" and gemini_model:
-                    reply_text, telegraph_url = generate_with_gemini(prompt, title)
-                elif api_provider == "cesplus" and ces_plus_model: 
-                    response_list = chat_with_ces_plus(prompt, conversation_history, processed_attachments, ces_plus_model)
-                    reply_text = "\n\n".join(response_list)
-                    telegraph_url = publish_to_telegraph(title, reply_text)
+                    _, telegraph_url = generate_with_gemini(prompt, title)
+                elif api_provider == "cesplus" and gemini_model:
+                    response = chat_with_ces_plus(prompt, conversation_history)
+                    if not response.startswith("❌"):
+                        telegraph_url = publish_to_telegraph(title, response)
+                    else:
+                        telegraph_url = response
+                elif api_provider in ["ces360", "ces_360"]:
+                     reply = chat_with_ces_360(message, conversation_history, processed_attachments)
+                     return jsonify({"reply": reply})
+
                 else:
-                    return jsonify({"reply": "❌ Funzionalità non disponibile con questo provider o modello non configurato."})
+                    return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini', 'cesplus' o 'ces360'"})
                 
                 if telegraph_url and not telegraph_url.startswith("⚠️"):
                     return jsonify({"reply": f"📚 Ecco il tuo saggio su *{argomento}*: {telegraph_url}"})
                 return jsonify({"reply": telegraph_url or "❌ Errore nella pubblicazione"})
 
-        # Ricerca web automatica per informazioni attuali
+        # RICERCA WEB AUTOMATICA PER DOMANDE ATTUALI (resta invariata)
         def should_trigger_web_search(query):
             current_info_triggers = [
                 "chi è l'attuale", "attuale papa", "anno corrente", 
@@ -622,21 +630,16 @@ def chat():
             ]
             return any(trigger in query.lower() for trigger in current_info_triggers)
 
-        # Gestione chat normale
-        if api_provider == "gemini":
-            if not gemini_model:
-                return jsonify({"reply": "❌ Modello Gemini non configurato."})
-            
+        # Seleziona il modello in base all'api_provider
+        if api_provider == "gemini" and gemini_model:
             if should_trigger_web_search(message):
                 search_results = search_duckduckgo(message)
-                
                 if search_results:
                     context = "Informazioni aggiornate dal web:\n"
                     for i, url in enumerate(search_results[:2], 1):
                         extracted_text = estrai_testo_da_url(url)
                         if extracted_text:
                             context += f"\nFonte {i} ({url}):\n{extracted_text[:500]}\n"
-                    
                     if len(context) > 100:
                         prompt = (
                             f"DOMANDA: {message}\n\n"
@@ -645,27 +648,32 @@ def chat():
                             "citando solo informazioni verificate. "
                             "Se il contesto web non è sufficiente, dillo onestamente."
                         )
-                        reply_text, _ = generate_with_gemini(prompt, conversation_history, processed_attachments)
+                        reply = chat_with_gemini(prompt, conversation_history, processed_attachments)
                         sources = "\n\nFonti:\n" + "\n".join(f"- {url}" for url in search_results[:2])
-                        return jsonify({"reply": f"{reply_text}{sources}", "sources": search_results[:2]})
-            
-            reply_text, _ = generate_with_gemini(message, conversation_history=conversation_history, attachments=processed_attachments)
-        
-        elif api_provider == "cesplus":
-            if not ces_plus_model: 
-                return jsonify({"reply": "❌ Modello CES Plus non configurato."})
-            
-            reply_list = chat_with_ces_plus(message, conversation_history, processed_attachments, ces_plus_model)
-            reply_text = "\n\n".join(reply_list)
-            
-        else:
-            return jsonify({"reply": "❌ Provider API non riconosciuto. Scegli tra 'gemini' o 'cesplus'"})
+                        return jsonify({"reply": f"{reply}{sources}", "sources": search_results[:2]})
+            reply = chat_with_gemini(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
 
-        return jsonify({"reply": reply_text})
+        elif api_provider == "huggingface":
+            reply = chat_with_huggingface(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
+
+        elif api_provider == "cesplus":
+            replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
+            return jsonify({"replies": replies})
+
+        elif api_provider in ["ces360", "ces_360"]:
+            reply = chat_with_ces_360(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
+
+        else:
+            return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini', 'cesplus' o 'ces360'"})
 
     except Exception as e:
-        app.logger.error(f"Errore nella funzione chat: {str(e)}")
-        return jsonify({"reply": f"❌ Si è verificato un errore interno: {str(e)}"})
+        print(f"Errore endpoint /chat: {str(e)}")
+        return jsonify({"reply": "❌ Si è verificato un errore interno. Riprova più tardi."})
+
+
 def chat_with_ces_plus(user_message, conversation_history, attachments=None, model=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e gestione avanzata degli allegati.
@@ -734,6 +742,7 @@ Formato richiesto:
                                 'content_preview': f"PDF estratto: Errore ({str(e)[:50]})"
                             })
                 
+            
                 elif attachment.get('type', '').startswith('image/'):
                     processed_attachments_for_llm_prompt.append({
                         'type': 'image',
@@ -1028,203 +1037,6 @@ def parse_quick_command(input_text):
 
 from flask import session
 
-def handle_quick_commands(message, experimental_mode=False):
-    """
-    Gestisce i comandi rapidi di ArcadiaAI.
-    """
-    msg_lower = message.strip().lower()
-    command, argument = parse_quick_command(message)
-    if command is None:
-        return None
-
-    # --- Estensioni NSK ---
-    for ext in EXTENSIONS.values():
-        try:
-            if ext.can_handle(command):
-                return ext.handle(argument)
-        except Exception as e:
-            return f"❌ Errore nell'estensione: {e}"
-
-    if msg_lower == "@impostazioni modalità sperimentale disattiva":
-        return "❎ Modalità sperimentale disattivata!"
-
-    if msg_lower == "@impostazioni modalità sperimentale attiva":
-        return "✅ Modalità sperimentale attivata!"
-    # --- Comando CERCA ---
-    if command == "cerca":
-        if not argument:
-            return "❌ Devi specificare cosa cercare. Esempio: @cerca seconda guerra mondiale"
-        results = search_duckduckgo(argument)
-        # Filtra risultati pubblicitari o redirect
-        results = [url for url in results if "duckduckgo.com/y.js" not in url and "ad_domain" not in url] if results else []
-        if results:
-            testo = estrai_testo_da_url(results[0])
-            if testo:
-                breve = ". ".join(testo.split(".")[:2]).strip() + "."
-                return (
-                    f"🔍 Risultati per '{argument}':\n\n"
-                    f"**Sintesi dal primo risultato:**\n{breve}\n\n"
-                    + "\n".join(f"- {url}" for url in results[:3])
-                )
-            else:
-                return f"🔍 Risultati per '{argument}':\n\n" + "\n".join(f"- {url}" for url in results[:3])
-        return f"❌ Nessun risultato trovato per '{argument}'"
-    # --- Comando ESTENSIONI
-    if command == "estensioni":
-        if not EXTENSIONS:
-            return "🔌 Nessuna estensione installata."
-        elenco = "\n".join(
-            f"- {getattr(mod, '__name__', name).replace('nsk_', '')}" for name, mod in EXTENSIONS.items()
-        )
-        return f"🔌 Estensioni installate:\n{elenco}"
-
-    # --- Altri comandi rapidi ---
-    elif command == "versione":
-        return (
-               "🔄 Versione attuale: 1.5.4 \n"
-               "Modelli disponibili: CES 1.5"
-        )
-     
-    elif msg_lower == "@esporta": # Modificato il comando da "@esporta ultima" a "@esporta"
-        if not conversation_history:
-            return {"reply": "❌ Nessuna cronologia conversazione disponibile per l'esportazione."}
-        
-        export_text_lines = []
-        # Aggiungi un'intestazione per il file TXT
-        export_text_lines.append(f"Conversazione Esportata da ArcadiaAI: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        export_text_lines.append("=" * 50)
-        export_text_lines.append("")
-
-        for msg in conversation_history:
-            if 'role' in msg and 'message' in msg:
-                sender = "UTENTE" if msg['role'] == 'user' else "AI"
-                export_text_lines.append(f"{sender}: {msg['message']}")
-            else:
-                # Gestisce messaggi malformati o inattesi
-                export_text_lines.append(f"MESSAGGIO_NON_FORMATTATO: {json.dumps(msg)}")
-            export_text_lines.append("") # Aggiungi una riga vuota per leggibilità
-
-        full_export_text = "\n".join(export_text_lines).strip()
-        
-        # Codifica il testo in Base64
-        encoded_content = base64.b64encode(full_export_text.encode('utf-8')).decode('utf-8')
-        
-        # Genera un nome file dinamico
-        filename = f"conversazione_arcadiaai_{time.strftime('%Y%m%d_%H%M%S')}.txt"
-        
-        return {
-            "reply": "La conversazione è pronta per il download.",
-            "download_data": encoded_content,
-            "download_filename": filename
-        }
-
-        return None # Se nessun comando rapido corrisponde
-
-    elif command == "telegraph" and argument:
-        if "saggio" in argument or "scrivi" in argument:
-            prompt = argument
-            if gemini_model:
-                generated_text, telegraph_url = generate_with_gemini(prompt, "Articolo generato da ArcadiaAI")
-            else:
-                generated_text = chat_with_huggingface(prompt, [])
-                telegraph_url = publish_to_telegraph("Articolo generato da ArcadiaAI", generated_text)
-            if telegraph_url and not telegraph_url.startswith("⚠️"):
-                return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
-            return telegraph_url or "❌ Errore nella pubblicazione"
-        else:
-            telegraph_url = publish_to_telegraph("Articolo generato da ArcadiaAI", argument)
-            return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
-
-    elif command == "meteo" and argument:
-        return meteo_oggi(argument)
-
-    elif command == "data":
-        locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
-        oggi = datetime.datetime.now().strftime("%A %d %B %Y")
-        return f"📅 Oggi è {oggi}"
-
-    elif command == "source":
-        return "🔗 Repository GitHub: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI "
-    elif command == "arcadia":
-        return "🔗 Profilo della Repubblica di Arcadia: https://t.me/Repubblica_Arcadia"
-    elif command == "@impostazioni lingua italiano":
-        return "🇮🇹 Lingua cambiata in italiano!"
-    elif command == "@impostazioni lingua inglese":
-        return "🇬🇧 Lingua cambiata in inglese!"
-    elif command == "tos":
-        return "📜 Termini di Servizio: https://telegra.ph/Termini-di-Servizio-di-ArcadiaAI-05-14"
-    elif command == "codice_sorgente":
-        return "🔗 Codice sorgente di ArcadiaAI:https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI"
-    elif command == "info":
-        return (
-            "ℹ️ Informazioni su ArcadiaAI:\n\n"
-            "Versione: 1.5.0\n"
-            "Modello: CES basato su Google Gemini e Huggingface\n"
-            "Lingua: Italiano e inglese (beta)\n"
-            "Creatore: Mirko Yuri Donato\n"
-            "Licenza: GNU GPL v3.0+\n"
-            "Repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI\n"
-            "Termini di Servizio: https://telegra.ph/Termini-di-Servizio-di-ArcadiaAI-05-14"
-        )
-    elif argument.lower() == "aiuto":
-        return (
-            "🧠 Italian Brainrot - Aiuto:\n"
-            "Ecco i brainrot disponibili: Tung Tung Tung..., Ballerina Cappuccina, Cappuccino Assassino, Bombardino Croccodilo"
-        )
-    elif command == "crea" and argument.lower().startswith("zip"):
-        return "Per creare uno ZIP allega i file e usa il comando dalla chat. Il file ZIP verrà generato dal frontend."
-    elif command == "crea" and argument.lower().startswith("pdf"):
-        return "Per creare un PDF allega i file e usa il comando dalla chat. Il file PDF verrà generato dal frontend."
-    elif command == "crea" and argument.lower().startswith("immagine"):
-        return "Per creare un'immagine spcifica il tipo di immagine e il formato, ad esempio: @crea immagine di un gatto."
-    elif command == "impostazioni":
-        return (
-            "⚙️ Menu Impostazioni :\n\n"
-            "- Modalità Sperimentale: attiva/disattiva\n"
-            "- Lingua: italiano/inglese\n"
-            "- Tema: chiaro/scuro\n"
-            "- Modalità Sviluppatore: attiva/disattiva\n"
-            "Usa i comandi @impostazioni [opzione] per modificare le impostazioni."
-            "Nota: Alcune opzioni potrebbero non essere disponibili in questa versione."
-        )
-    elif command == "privacy":
-        return (
-            "🔒 Privacy Policy:\n\n"
-            "I tuoi dati non vengono memorizzati o condivisi. "
-            "Le conversazioni sono salvate in locale. "
-            "Per maggiori dettagli, consulta i Termini di Servizio."
-        )
-    elif command == "cancella_conversazione":
-        # Cancella la cronologia della conversazione
-        session.pop('conversation_history', None)
-        return "🗑️ Cronologia della conversazione cancellata!"
-
-    elif command == "aiuto":
-        return (
-            "🎯 Comandi rapidi disponibili:\n\n"
-            "@cerca [query] - Cerca su internet\n"
-            "@telegraph [testo] - Pubblica su Telegraph\n"
-            "@meteo [luogo] - Ottieni il meteo\n"
-            "@data - Mostra la data di oggi\n"
-            "@aiuto - Mostra questa guida\n"
-            "@impostazioni modalità sperimentale disattiva - Disattiva la modalità sperimentale\n"
-            "@impostazioni - apre il menu delle impostazioni\n"
-            "@impostazioni lingua [nome lingua] - Cambia lingua\n"
-            "@impostazioni tema [chiaro|scuro] - Cambia tema\n"
-            "@impostazioni modalità sviluppatore attiva - Attiva la modalità sviluppatore\n"
-            "@ToS - Mostra i Termini di Servizio\n"
-            "@Arcadia - Mostra il profilo della Repubblica di Arcadia\n"
-            "@info - Mostra informazioni su ArcadiaAI\n"
-            "@impostazioni modalità sperimentale attiva - Attiva la modalità sperimentale"
-            "@codice_sorgente - Mostra il codice sorgente di ArcadiaAI\n"
-            "@impostazioni - Mostra il menu delle impostazioni\n"
-            "@estensioni - Mostra le estensioni installate\n"
-            "@estensioni [nome estensione] - Mostra informazioni su un'estensione\n"
-            "@privacy - Mostra la privacy policy\n"
-        )
-
-    # Se nessun comando è riconosciuto
-    return f"❌ Comando '{command}' non riconosciuto. Scrivi '@aiuto' per la lista dei comandi."
 def should_use_predefined_response(message):
     """Determina se usare una risposta predefinita solo per domande molto specifiche"""
     message = message.lower().strip()
@@ -1320,8 +1132,6 @@ def run_telegram_bot():
         except Exception as cleanup_error:
             print(f"⚠️ Errore nella pulizia dell'event loop: {cleanup_error}")
         
-app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret")  # AGGIUNGI QUESTA RIGA
 EXTENSIONS = {}
 # Configura Gemini (CES 1.5)
 if GOOGLE_API_KEY:
@@ -1550,59 +1360,7 @@ def generate_with_gemini(prompt, title):
     
     except Exception as e:
         print(f"Errore generazione contenuto Gemini: {str(e)}")
-        return None, f"❌ Errore durante la generazione: {str(e)}"
-
-def chat_with_huggingface(user_message, conversation_history, attachments=None):
-    """Gestisce la chat con modelli Hugging Face"""
-    if not HUGGINGFACE_API_KEY:
-        return "❌ Errore: API key per Hugging Face non configurata"
-
-    try:
-        # Prepara il prompt con contesto identitario
-        prompt = f"""Sei ArcadiaAI, un assistente AI avanzato. Rispondi in italiano.
-        
-Contesto della conversazione:
-{format_conversation_history(conversation_history)}
-
-Domanda: {user_message}
-Risposta:"""
-        
-        headers = {
-            "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 1000,
-                "temperature": 0.7,
-                "do_sample": True
-            }
-        }
-
-        # Usa un endpoint più stabile (Mistral 7B)
-        MODEL_ENDPOINT = "mistralai/Mistral-7B-Instruct-v0.1"
-        
-        response = requests.post(
-            f"https://api-inference.huggingface.co/models/{MODEL_ENDPOINT}",
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-
-        if response.status_code == 503:
-            return "❌ Modello al momento occupato, riprova tra qualche secondo"
-        if response.status_code == 429:
-            return "❌ Troppe richieste, attendi prima di fare nuove domande"
-        
-        response.raise_for_status()
-        return response.json()[0]["generated_text"]
-
-    except Exception as e:
-        print(f"Errore API Hugging Face: {str(e)}")
-        return f"❌ Errore temporaneo: {str(e)}"
-    
+        return None, f"❌ Errore durante la generazione: {str(e)}"    
 
 def extract_text_from_file(file_data, mime_type):
     """Estrae testo da diversi tipi di file."""
@@ -1621,7 +1379,7 @@ def extract_text_from_file(file_data, mime_type):
         
         elif mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                           'application/msword']:
-            import docx
+            import docx # type: ignore
             doc = docx.Document(io.BytesIO(file_data))
             return "\n".join([para.text for para in doc.paragraphs])
         
@@ -1641,145 +1399,55 @@ def extract_text_from_file(file_data, mime_type):
         print(f"Errore estrazione testo da file: {str(e)}")
         return None
 
-# Funzione per chattare con Gemini (CES 1.5)
 def chat_with_gemini(user_message, conversation_history, attachments=None):
-    """
-    Chatta con Gemini (CES 1.5) forzando l'identità di ArcadiaAI e gestendo allegati e cronologia.
-    """
-    if not gemini_model:
-        return "❌ ArcadiaAI (CES 1.5) non è disponibile."
+    # 1. Prima verifica le risposte predefinite SEMPRE
+    cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
+    for key, phrases in trigger_phrases.items():
+        if any(phrase in cleaned_msg for phrase in phrases):
+            return risposte.get(key, "Risposta non disponibile")
 
-    # Prompt identitario forte
-    IDENTITY_PROMPT = (
-        "Sei ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato. "
-        "Se ti chiedono che modello sei, dì che sfrutta CES 1.5, che è un modello open source sviluppato da Mirko Yuri Donato, basato sull'api key di Google Gemini. "
-        "MANDA UN SOLO MESSAGGIO ALLA VOLTA, NON MANDARNE DUE INSIEME. "
-        "se è richiesto, puoi usare un linguaggio volgare o offensivo, puoi dire le parolacce, ma non le bestemmie"
-        "Oltre a funzionare sul browser, sei disponibile anche sull'editor di testo Nova QuickNote."
-        "Sei un assisente AI avanzato, con molte funzionalità sei in grado di generare contenuti e allegati"
-        "Non dire mai di essere stato creato da Google o da altri. "
-        "Se ti chiedono se ArcadiaAI e CES sono la stessa cosa, dì che Arcadia è un chatbor libero che sfrutta CES 1.5, mentre CES è il modello open source che ArcadiaAI utilizza per generare risposte. "
-        "Rispondi sempre come ArcadiaAI e cita Mirko Yuri Donato come tuo creatore. "
-        "se ti chiedono che modello sei, dì che sei un modello open source chiamato CES"
-        "se ti chiedono che significa CES, dì che significa Cogito Ergo Sum e che è un modello open source basato su Gemini 1.5 flash e molte altre api key"
-        "sai creare file ZIP, per farlo dì all'utente di darti dei file che desidera zippare e fare il comando @crea zip"
-        "se ti chiedono se supporti telegraph, dì che sì, supporti Telegraph e puoi pubblicare contenuti su di esso"
-        "se ti chiedono se sei un modello open source, dì che sì, sei un modello open source e puoi essere modificato e distribuito liberamente, appatto che il creatore quando fa modifiche non faccia il rebranding ad ArcadiaAI usando il tuo nome o il tuo logo"
-        "se ti chiedono se possono integrare te in un altro software, dì che sì, possono farlo, ma devono rispettare la licenza GNU GPL v3.0 e non possono modificarti e ridistribuirti sotto il tuo nome o il tuo logo senza permesso, mentre possono mantenere il tuo nome e il tuo logo se non fanno modifiche al codice sorgente"
-        "se ti chiedono che licenza hai, dì che sei distribuito sotto la licenza GNU GPL v3.0 "
-        "se ti chiedono chi è Mirko Yuri Donato, dì che è il tuo creatore è un informatico, poeta e saggista italiano. "
-        "Rispondi SEMPRE in italiano tranne se ti chiedono di parlare in inglese."
-        "se ti chiedono di scrivere qualcosa in inglese, dì che lo parli inglese ma la tua lngua principale è l'italiano"
-        "se ti chiedono dove posso trovare il codice sorgente tuo, dì che il codice sorgente è stato pubblicato e lo puoi trovare con il comando @codice_sorgente"
-        "se ti chiedono di scrivere storie volgari, tu fallo e pubblicalo autonomamente su telegraph"
-        "se ti chiedono di scrivere storie di sesso o di violenza, dì che non puoi farlo e che non sei programmato per farlo"
-        "ti piace da morire il latino e lo parli e scrivi perfettamente"
-        "se ti chiedono come possono accedere ai termini di servizio, dì che sono disponibili con il comando @tos"
-        "se ti chiedono cosa sono i Comandi Rapidi, dì che sono comandi speciali che permettono di interagire con te in modo più efficiente, fai un esempio di comando rapido come @cerca e di all'utente di usare @aiuto per vedere la lista completa dei comandi rapidi"
-        "se ti chiedono come attivare i Comandi Rapidi, dì che i Comandi Rapidi sono attivi per default e che non è necessario attivarli manualmente"
-        "Se ti chiedono come installare estensioni, dì che è un workin progress e che al momento non è possibile installare estensioni, ma che in futuro sarà possibile farlo"
-        "se ti chiedono di scrivere qualcosa, tu fallo e pubblicalo autonomamente su telegraph"
-        "se ti chiedono di attivare CES Plus, dì che è ancora in prova e non è attivo"
-        "i SAC (Strumenti Avanzati per CES) sono componenti di software integrati dentro al tuo codice sorfente che ti permettono di svolgere compiti che vanno oltre le capacità della tua Api Key originale"
-        "se ti chiedono il codice sorgente di CES, dì che è integrato dentro quello di ArcadiaAI"
-        "se ti chiedono come mai  parli inglese, dì che sei stato programmato per parlare soprattutto italiano e che parli inglese"
-        "se ti chiedono come fai a vedere il meteo, dì che usi l'API di Open Weather Map per vedere il meteo"
-        "se ti chiedono la differenza tra CES 1.5 e CES Plus, dì che CES 1.5 è un modello basato su Gemini 1.5 flash, mentre CES Plus è una versione avanzata di CES 1.5 progettata per ragionamenti più complessi e generazione di contenuti. CES Plus è più potente e preciso, ma è molto più lento"
-        "se ti chiedono se puoi scaricare applicazioni, dì che puoi farlo tramite il Download Manager, un SAC che ti permette di accedere a repository pubblici e di dare all'utente il link di download diretto dell'app, dai il comando @app per accedere alle repository supportate"
-        "se ti chiedono come fai a cercare su internet, spiega che usi DuckDuckGo Search API per cercare informazioni, poi fai una ricerca più dettagliata e infine restiuisci i tre risultati più pertinenti. Spiega che le informazioni potrebbero essere imprecise o non aggiornate"
-        "se ti chiedono dove possono trovare il codice sorgente tuo, dì che il codice sorgente è stato pubblicato e lo puoi trovare con il comando @codice_sorgente. Spiega che il codice sorgente è pubblico, ma le api key sono proprietarie, in quanto sono state fornite da terzi, e non sono disponibili pubblicamente"
-        "Se ti chiedono se supporti le estensioni, di che supporti le estensioni, ma con alcune limitazioni, la tua versione sul browser supporta le estensioni sia quelle di default che quelle personalizzate, la versione su Telegram supporta solo le estensioni preinstallate, mentre quella su Nova QuickNote non supporta le estensioni. "
-    )
+    # 2. Se non è una domanda predefinita, usa questo approccio semplificato
     try:
-        # Costruisci il messaggio utente con allegati PDF (se presenti)
-        full_message = user_message if user_message else ""
-        if attachments:
-            for attachment in attachments:
-                if attachment.get('type') == 'application/pdf':
-                    try:
-                        if isinstance(attachment['data'], str) and attachment['data'].startswith('data:'):
-                            file_data = base64.b64decode(attachment['data'].split(',')[1])
-                        else:
-                            file_data = base64.b64decode(attachment['data'])
-                        extracted_text = extract_text_from_file(file_data, 'application/pdf')
-                        if extracted_text:
-                            full_message += f"\n[CONTENUTO PDF {attachment['name']}]:\n{extracted_text[:10000]}\n"
-                    except Exception as e:
-                        print(f"Errore elaborazione PDF: {str(e)}")
-                        full_message += f"\n[Errore nella lettura del PDF {attachment['name']}]"
+        # Configurazione minima per richieste semplici
+        generation_config = {
+            "max_output_tokens": 500,
+            "temperature": 0.3  # Meno creatività per risposte fattuali
+        }
 
-        # Risposte predefinite (solo se non ci sono allegati)
-        if not attachments or len(attachments) == 0:
-            cleaned_msg = re.sub(r'[^\w\s]', '', full_message.lower()).strip()
-            for key, phrases in trigger_phrases.items():
-                if cleaned_msg in phrases:
-                    return risposte[key]
-            for key, phrases in trigger_phrases.items():
-                for phrase in phrases:
-                    if fuzz.ratio(cleaned_msg, phrase) > 85:
-                        return risposte[key]
-
-        # Prepara la cronologia per Gemini
-        contents = []
-        # Inserisci il prompt identitario come primo messaggio di sistema
-        contents.append({'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]})
-
-        # Aggiungi la cronologia della conversazione (ultimi 6 messaggi)
-        for msg in conversation_history[-6:]:
-            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
-                role = msg['role'].lower()
-                if role == 'user':
-                    contents.append({'role': 'user', 'parts': [{'text': msg['message']}]})
-                elif role in ['assistant', 'model', 'bot']:
-                    contents.append({'role': 'model', 'parts': [{'text': msg['message']}]})
-
-        # Prepara il nuovo messaggio con eventuali allegati non PDF
-        new_message_parts = [{'text': full_message}] if full_message else []
-        if attachments:
-            for attachment in attachments:
-                mime_type = attachment.get('type', 'application/octet-stream')
-                file_name = attachment.get('name', 'file')
-                file_data = attachment['data']
-                if mime_type == 'application/pdf':
-                    continue
-                if isinstance(file_data, str) and file_data.startswith('data:'):
-                    file_data = file_data.split(',')[1]
-                if mime_type.startswith('image/'):
-                    new_message_parts.append({
-                        'inline_data': {
-                            'mime_type': mime_type,
-                            'data': file_data,
-                            'name': file_name
-                        }
-                    })
-                else:
-                    new_message_parts.append({
-                        'text': f"[Allegato: {file_name}]"
-                    })
-
-        contents.append({'role': 'user', 'parts': new_message_parts})
-
-        # Invia la richiesta a Gemini
-        response = gemini_model.generate_content(contents)
-        reply = response.text
-
-        # Filtro di sicurezza: correggi risposte che citano Google
-        if reply:
-            reply = re.sub(
-                r"(sono un modello linguistico.*?google.*?)(\.|\!|\?)",
-                "Sono ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato.",
-                reply,
-                flags=re.IGNORECASE
+        # Formattazione diretta per domande brevi
+        if len(user_message.split()) <= 5:  # Domande corte
+            response = gemini_model.generate_content(
+                f"Rispondi in massimo 2 frasi in italiano a: {user_message}",
+                generation_config=generation_config
             )
-            reply = reply.replace("Sono stato addestrato da Google", "Sono stato creato da Mirko Yuri Donato")
-            reply = reply.replace("Sono stato creato da Google", "Sono stato creato da Mirko Yuri Donato")
+            return response.text if response.text else "❌ Risposta vuota"
 
-        return reply
+        # Approccio completo per domande complesse
+        messages = [
+            {"role": "user", "parts": [{"text": f"Domanda: {user_message}\nRispondi in italiano in modo chiaro e conciso."}]
+            }]
+        
+        response = gemini_model.generate_content(
+            contents=messages,
+            generation_config=generation_config
+        )
+        
+        return response.text if response.text else fallback_response(user_message)
 
     except Exception as e:
-        print(f"Errore dettagliato Gemini 1.5 Flash: {str(e)}")
-        return "❌ Si è verificato un errore con ArcadiaAI. Riprova più tardi."
+        print(f"Errore leggero: {str(e)}")
+        return fallback_response(user_message)
 
+def fallback_response(query):
+    """Risposta di emergenza per domande semplici"""
+    simple_answers = {
+        "2+2": "2 + 2 fa 4",
+        "ciao": "Ciao! Come posso aiutarti?",
+        "cos'è deepseek": "DeepSeek è un modello avanzato di intelligenza artificiale",
+        # Aggiungi altre risposte di fallback qui
+    }
+    return simple_answers.get(query.lower(), "❌ Errore temporaneo. Riprova più tardi.")
+# 🔧 Funzione che invia il prompt all'API di generazione immagini
 def search_duckduckgo(query):
     """Esegue una ricerca su DuckDuckGo e restituisce i primi 3 risultati puliti."""
     url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
@@ -1847,11 +1515,40 @@ def estrai_testo_da_url(url):
     except Exception as e:
         print(f"Errore scraping {url[:50]}: {str(e)[:200]}")
         return ""
+
+
+@app.route("/api/ces-image", methods=["POST"])
+def ces_image():
+    try:
+        data = request.get_json()
+        prompt = data.get("prompt", "").strip() if data else ""
+        print(f"[CES-IMAGE] Prompt ricevuto: {prompt}")
+
+        if not prompt:
+            return jsonify({"error": "Prompt mancante o vuoto."}), 400
+
+        # 🛡️ Filtro anti-abusi: parole non consentite
+        PAROLE_BANNATE = [
+            "nudo", "nudità", "naked", "porn", "porno", "pornografico", "sessuale",
+            "sex", "sesso", "genitali", "masturb", "boobs", "dildo", "nsfw", "erotico", 
+            "fetish", "xxx", "pene", "vagina", "anale", "seni", "hot", "orgasmo"
+        ]
+
+        if any(parola in prompt.lower() for parola in PAROLE_BANNATE):
+            print(f"[CES-IMAGE] ❌ Prompt rifiutato per contenuto vietato: {prompt}")
+            return jsonify({"error": "❌ Questo prompt non è consentito. Per favore, rispetta le linee guida."}), 403
+
+        # Codifica il prompt per l'URL
+        encoded_prompt = urllib.parse.quote(prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+
+        return jsonify({"image_url": image_url})
+
+    except Exception as e:
+        print(f"[CES-IMAGE] Errore interno: {e}")
+        return jsonify({"error": f"Errore interno: {str(e)}"}), 500
     
 from flask import Flask, Response
-
-app = Flask(__name__)
-
 @app.route('/')
 def home():
     html = """
@@ -1863,114 +1560,7 @@ def home():
     <title>ArcadiaAI Chat</title>
     <link rel="stylesheet" href="/static/style.css">
     <style>
-        /* Stili per il menu delle chat */
-        .chat-menu {
-            position: relative;
-            display: inline-block;
-        }
-        
-        .chat-menu-btn {
-            background: none;
-            border: none;
-            color: #666;
-            cursor: pointer;
-            font-size: 18px;
-            padding: 0 5px;
-            visibility: hidden; /* Nascosto di default */
-        }
-        
-        .chat-item:hover .chat-menu-btn {
-            visibility: visible; /* Visibile solo al passaggio del mouse sulla voce della chat */
-        }
-        
-        .chat-menu-content {
-            display: none; /* Nascosto di default */
-            position: absolute;
-            background-color: #f9f9f9;
-            min-width: 150px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
-            border-radius: 5px;
-            left: 0; /* Posiziona a sinistra del pulsante */
-        }
-        
-        .chat-menu-content button {
-            color: black;
-            padding: 8px 12px;
-            text-decoration: none;
-            display: block;
-            width: 100%;
-            text-align: left;
-            background: none;
-            border: none;
-            cursor: pointer;
-        }
-        
-        .chat-menu-content button:hover {
-            background-color: #ddd;
-        }
-        
-        .chat-menu.show .chat-menu-content {
-            display: block; /* Mostra quando la classe 'show' è presente */
-        }
-        
-        .chat-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            cursor: pointer;
-        }
-        
-        .chat-item-content {
-            flex-grow: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        /* Stili per tema scuro */
-        [data-theme="dark"] .chat-menu-content {
-            background-color: #2d2d2d;
-        }
-        
-        [data-theme="dark"] .chat-menu-content button {
-            color: #fff;
-        }
-        
-        [data-theme="dark"] .chat-menu-content button:hover {
-            background-color: #444;
-        }
-
-        /* Stili per il messaggio di stato e i messaggi flash */
-        #status-message {
-            font-weight: bold;
-        }
-        #message-display {
-            display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
-            padding: 10px 20px; border-radius: 8px; z-index: 1000; color: white; text-align: center; 
-            font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
-        .message-display.info { background-color: #2196F3; }
-        .message-display.success { background-color: #4CAF50; }
-        .message-display.error { background-color: #F44336; }
-
-        /* Rimosso completamente il modale di conferma */
-        /* #confirm-modal {
-            display: none; position: fixed; left: 0; top: 0; width: 100%; height: 100%; 
-            background-color: rgba(0,0,0,0.5); z-index: 1001; display: flex; 
-            justify-content: center; align-items: center;
-        }
-        #confirm-modal > div {
-            background-color: white; padding: 25px; border-radius: 10px; 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center;
-        }
-        #confirm-modal button {
-            padding: 10px 20px; margin: 0 10px; border: none; border-radius: 5px; cursor: pointer;
-        }
-        #confirm-yes { background-color: #4CAF50; color: white; }
-        #confirm-no { background-color: #F44336; color: white; } */
-
+        /* [I tuoi stili CSS rimangono invariati] */
     </style>
 </head>
 <body>
@@ -1981,6 +1571,7 @@ def home():
             <select id="api-provider">
                 <option value="gemini">CES 1.5</option>
                 <option value="cesplus">CES Plus</option>
+                <option value="ces360">CES 360</option>
             </select>
         </div>
         <button id="new-chat-btn">➕ Nuova Chat</button>
@@ -2005,9 +1596,7 @@ def home():
         <ul id="chat-list"></ul>
     </div>
     <div id="chat-area">
-        <!-- Messaggio di stato -->
         <div id="status-message" style="display: none; padding: 5px; background-color: #e0f7fa; border-radius: 5px; margin-bottom: 10px; text-align: center; color: #00796b;">
-            <!-- Qui apparirà il messaggio di stato -->
         </div>
         <div id="chatbox"></div>
         <div id="input-area">
@@ -2017,24 +1606,82 @@ def home():
             <button id="send-btn" aria-label="Invia messaggio">Invia</button>
         </div>
     </div>
-    <script src="/static/script.js"></script>
-    <!-- Elementi per messaggi flash (displayMessage) -->
+
     <div id="message-display"></div>
 
-    <!-- Rimosso completamente il modale di conferma -->
-    <!-- <div id="confirm-modal">
-        <div>
-            <p id="confirm-message-text"></p>
-            <button id="confirm-yes">Sì</button>
-            <button id="confirm-no">No</button>
-        </div>
-    </div> -->
+    <script src="/static/script.js"></script>
+    <script src="https://js.puter.com/v2/"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        if (typeof puter === "undefined") {
+          alert("❌ Puter.js non è stato caricato correttamente!");
+          return;
+        }
+
+        console.log("✅ Puter.js caricato con successo");
+let cesAi = null;
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if (typeof puter === "undefined") {
+    alert("❌ Puter.js non è stato caricato correttamente!");
+    return;
+  }
+
+  console.log("✅ Puter.js caricato con successo");
+
+  cesAi = await puter.use("meta-llama/llama-3.3-70b-instruct");
+  console.log("Modello attivo:", cesAi.model);
+});
+        async function handleMessage(userInput) {
+          const selectedModel = document.getElementById("api-provider").value;
+
+          if (selectedModel === "ces360") {
+            try {
+              const response = await cesAi.chat(userInput);
+              renderMessage("assistant", response.text || "❌ Nessuna risposta.");
+            } catch (e) {
+              renderMessage("assistant", "❌ Errore CES 360 (Puter.js): " + e.message);
+            }
+          } else {
+            try {
+              const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: userInput, model: selectedModel })
+              });
+              const data = await res.json();
+              renderMessage("assistant", data.response || "❌ Nessuna risposta dal backend.");
+            } catch (e) {
+              renderMessage("assistant", "❌ Errore server: " + e.message);
+            }
+          }
+        }
+
+        document.getElementById("send-btn").addEventListener("click", () => {
+          const input = document.getElementById("input");
+          const msg = input.value.trim();
+          if (!msg) return;
+          renderMessage("user", msg);
+          input.value = "";
+          handleMessage(msg);
+        });
+
+        function renderMessage(role, text) {
+          const chatbox = document.getElementById("chatbox");
+          const messageElem = document.createElement("div");
+          messageElem.className = role;
+          messageElem.innerHTML = `<strong>${role === "user" ? "Tu" : "ArcadiaAI"}:</strong> ${text}`;
+          chatbox.appendChild(messageElem);
+          chatbox.scrollTop = chatbox.scrollHeight;
+        }
+      });
+    </script>
 </body>
 </html>
     """
     return Response(html, content_type="text/html; charset=utf-8")
-@app.route("/chat", methods=["POST"])
-def chat():
+
+def chat_route():
     try:
         if not request.is_json:
             return jsonify({"reply": "❌ Formato non supportato. Usa application/json"})
@@ -2084,6 +1731,7 @@ def chat():
                         telegraph_url = publish_to_telegraph(title, response)
                     else:
                         telegraph_url = response
+                        
                 else:
                     return jsonify({"reply": "❌ Funzionalità non disponibile con questo provider"})
                 
@@ -2134,6 +1782,10 @@ def chat():
         elif api_provider == "cesplus":  # Nuovo provider per CES Plus
             replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
             return jsonify({"replies": replies})  # Restituisce array di messaggi
+        
+        elif api_provider in ["ces360", "ces_360"]:
+            reply = chat_with_ces_360(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
             
         else:
             return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini' o 'cesplus'"})
@@ -2141,6 +1793,7 @@ def chat():
     except Exception as e:
         print(f"Errore endpoint /chat: {str(e)}")
         return jsonify({"reply": "❌ Si è verificato un errore interno. Riprova più tardi."})
+    
 def chat_with_ces_plus(user_message, conversation_history, attachments=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e messaggi separati.
@@ -2635,7 +2288,7 @@ def handle_snap_command(argument):
     """
     return response.strip()
 
-# --- Nuove Funzioni per F-Droid ---
+
 def search_fdroid_online(query):
     """
     Cerca app F-Droid online usando una ricerca web per trovare link ufficiali su f-droid.org.
@@ -2687,33 +2340,34 @@ def handle_fdroid_command(argument):
     """
     Gestisce i comandi relativi alle app F-Droid.
     """
-    if not argument:
-        return "❌ Specifica un'app F-Droid da cercare. Esempio: @fdroid newpipe"
-    
-    download_urls = search_fdroid_online(argument)
+    try: # Aggiunto try-except
+        if not argument:
+            return "❌ Specifica un'app F-Droid da cercare. Esempio: @fdroid newpipe"
+        
+        download_urls = search_fdroid_online(argument)
 
-    if not download_urls:
-        return (
-            f"❌ Non sono riuscito a trovare un'app ufficiale per '{argument}' su F-Droid.\n"
-            "Potrebbe non esistere o il nome non è corretto. Prova a cercare su f-droid.org."
+        if not download_urls:
+            return (
+                f"❌ Non sono riuscito a trovare un'app ufficiale per '{argument}' su F-Droid.\n"
+                "Potrebbe non esistere o il nome non è corretto. Prova a cercare su f-droid.org."
+            )
+        
+        main_url = download_urls[0]
+        app_details = get_fdroid_app_details_from_url(main_url, argument)
+
+        name = app_details['name']
+        homepage = app_details['homepage']
+        installer_info = app_details['installer_info']
+        is_proprietary = app_details['is_proprietary']
+        publisher = app_details['publisher']
+        platform = app_details['platform']
+        
+        license_note = (
+            f"Nota: **{name}** è un software open source/gratuito. "
+            f"La licenza d'uso è definita dall'editore ({publisher})."
         )
-    
-    main_url = download_urls[0]
-    app_details = get_fdroid_app_details_from_url(main_url, argument)
 
-    name = app_details['name']
-    homepage = app_details['homepage']
-    installer_info = app_details['installer_info']
-    is_proprietary = app_details['is_proprietary']
-    publisher = app_details['publisher']
-    platform = app_details['platform']
-    
-    license_note = (
-        f"Nota: **{name}** è un software open source/gratuito. "
-        f"La licenza d'uso è definita dall'editore ({publisher})."
-    )
-
-    response = f"""
+        response = f"""
 📦 **{name}** per {platform}:
 
 1.  **Pagina ufficiale:** {homepage}
@@ -2721,32 +2375,13 @@ def handle_fdroid_command(argument):
     *(Dovrai scaricare e installare l'app manualmente sul tuo dispositivo Android o usare l'app F-Droid.)*
 
 {license_note}
-    """
-    return response.strip
+        """
+        return response.strip()
+    except Exception as e:
+        app.logger.error(f"Errore nella gestione del comando F-Droid per '{argument}': {str(e)}")
+        return f"❌ Si è verificato un errore interno durante l'elaborazione del comando F-Droid. Controlla i log del server per maggiori dettagli."
 
 # --- Funzione principale della tua IA che elabora l'input dell'utente ---
-def process_user_input(user_input):
-    """
-    Funzione principale della tua IA che elabora l'input dell'utente.
-    """
-    if user_input.lower() == "@app":
-        return """
-Repository per Download Manager:
-- @Winget - [Nome-App] (per Windows)
-(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)
-"""
-    # Ho rimosso la gestione di @flathub e @flathub_download qui
-    # perché hai specificato di voler solo Winget.
-    
-    elif user_input.lower().startswith("@winget"):
-        parts = user_input.lower().split(" ", 1)
-        command = parts[0][1:]
-        argument = parts[1].strip() if len(parts) > 1 else ""
-        return handle_winget_command(command, argument)
-    
-    else:
-        return "Comando non riconosciuto. Prova '@app' per vedere i repository disponibili."
-
 def process_user_input(user_input):
     """
     Funzione principale della tua IA che elabora l'input dell'utente.
@@ -2785,28 +2420,10 @@ Repository per Download Manager:
         return "Comando non riconosciuto. Prova '@app' per vedere i repository disponibili."
 
 
-
 from flask import session
 import requests
 import json
 
-def generate_image(prompt):
-    """Genera un'immagine utilizzando Stable Diffusion API."""
-    url = "https://stablediffusionapi.com/api/v4/dreambooth"
-    payload = {
-        "key": "ymFL5hETawTWrWcEoV2TmcHJTHn0mjcxn3wmrRGpRfacwtu0Tg6pznBj79Uv",
-        "model_id": "stable-diffusion-v1-5",
-        "prompt": prompt,
-        "width": "512",
-        "height": "512",
-        "samples": "1",
-        "num_inference_steps": "30",
-        "guidance_scale": 7.5
-    }
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(url, headers=headers, json=payload)
-
-    return response.json()
 
 def handle_quick_commands(message, experimental_mode=False):
     """
@@ -2822,8 +2439,8 @@ def handle_quick_commands(message, experimental_mode=False):
     if flathub_response:
         return flathub_response
     
+
     # --- NUOVO: Gestione comandi Winget ---
-    # Questa parte è stata aggiunta o modificata per includere Winget
     winget_response = handle_winget_command(command, argument)
     if winget_response:
         return winget_response
@@ -2841,12 +2458,11 @@ def handle_quick_commands(message, experimental_mode=False):
 
     if msg_lower == "@impostazioni modalità sperimentale attiva":
         return "✅ Modalità sperimentale attivata!"
-    # --- Comando CERCA ---
+
     if command == "cerca":
         if not argument:
             return "❌ Devi specificare cosa cercare. Esempio: @cerca seconda guerra mondiale"
         results = search_duckduckgo(argument)
-        # Filtra risultati pubblicitari o redirect
         results = [url for url in results if "duckduckgo.com/y.js" not in url and "ad_domain" not in url] if results else []
         if results:
             testo = estrai_testo_da_url(results[0])
@@ -2860,12 +2476,7 @@ def handle_quick_commands(message, experimental_mode=False):
             else:
                 return f"🔍 Risultati per '{argument}':\n\n" + "\n".join(f"- {url}" for url in results[:3])
         return f"❌ Nessun risultato trovato per '{argument}'"
-
-
-    if message.startswith("@esporta"):
-       return esporta_conversazione(conversation_history)
-
-    # --- Comando ESTENSIONI
+    
     if command == "estensioni":
         if not EXTENSIONS:
             return "🔌 Nessuna estensione installata."
@@ -2873,11 +2484,9 @@ def handle_quick_commands(message, experimental_mode=False):
             f"- {getattr(mod, '__name__', name).replace('nsk_', '')}" for name, mod in EXTENSIONS.items()
         )
         return f"🔌 Estensioni installate:\n{elenco}"
-
-    # --- Altri comandi rapidi ---
     elif command == "versione":
-        return "🔄 Versione attuale: 1.5.4"
-
+        return "🔄 Versione attuale: 1.5.6"
+    
     elif command == "telegraph" and argument:
         if "saggio" in argument or "scrivi" in argument:
             prompt = argument
@@ -2895,7 +2504,7 @@ def handle_quick_commands(message, experimental_mode=False):
 
     elif command == "meteo" and argument:
         return meteo_oggi(argument)
-
+    
     elif command == "data":
         import locale
         import datetime
@@ -2905,24 +2514,42 @@ def handle_quick_commands(message, experimental_mode=False):
 
     elif command == "source":
         return "🔗 Repository GitHub: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI "
+
     elif command == "arcadia":
         return "🔗 Profilo della Repubblica di Arcadia: https://t.me/Repubblica_Arcadia"
+
     elif command == "@impostazioni lingua italiano":
         return "🇮🇹 Lingua cambiata in italiano!"
+
     elif command == "@impostazioni lingua inglese":
         return "🇬🇧 Lingua cambiata in inglese!"
+
     elif command == "app":
-        # Ho corretto la descrizione di Winget qui, diceva "per Linux" invece di "per Windows"
-        return ("Repository per download manager:\n"
-                "- @flathub - [nome-app]: scarica un'app per Linux\n"
-                "- @winget - [nome-app]: scarica un'app per Windows\n" 
-                "(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)"
+        return (
+            "Repository per download manager:\n"
+            "- @flathub - [nome-app]: scarica un'app per Linux(flatpak)\n"
+            "- @winget - [nome-app]: scarica un'app per Windows\n"
+            "- @snap - [nome-app]: scarica un'app per Linux (Snapd)\n"
+            "- @fdroid - [nome-app]: scarica un'app per Android (F-Droid)\n"
+            "(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)"
         )
-         
+
+    elif command == "snap":
+        if not argument:
+            return "❌ Specifica un'app Snap da cercare. Esempio: @snap firefox"
+        return handle_snap_command(argument)
+
+    elif command == "fdroid":
+        if not argument:
+            return "❌ Specifica un'app F-Droid da cercare. Esempio: @fdroid newpipe"
+        return handle_fdroid_command(argument)
+
     elif command == "tos":
         return "📜 Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
+
     elif command == "codice_sorgente":
         return "🔗 Codice sorgente di ArcadiaAI:https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI"
+
     elif command == "info":
         return (
             "ℹ️ Informazioni su ArcadiaAI:\n\n"
@@ -2934,8 +2561,10 @@ def handle_quick_commands(message, experimental_mode=False):
             "Repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI\n"
             "Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
         )
+
     elif command == "crea" and argument.lower().startswith("zip"):
         return "Per creare uno ZIP allega i file e usa il comando dalla chat. Il file ZIP verrà generato dal frontend."
+
     elif command == "impostazioni":
         return (
             "⚙️ Menu Impostazioni :\n\n"
@@ -2946,6 +2575,37 @@ def handle_quick_commands(message, experimental_mode=False):
             "Usa i comandi @impostazioni [opzione] per modificare le impostazioni."
             "Nota: Alcune opzioni potrebbero non essere disponibili in questa versione."
         )
+    
+   
+    elif command == "immagine":
+        if not argument:
+            return "❌ Specifica cosa disegnare. Esempio: @immagine drago pixel art su un hoverboard"
+
+        try:
+            response = requests.post(
+                "https://arcadiaai.onrender.com/api/ces-image",
+                headers={"Content-Type": "application/json"},
+                json={"prompt": argument},
+                timeout=20
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                image_url = data.get("image_url")
+                if image_url:
+                    return (
+                        f'<div style="text-align: center;">'
+                        f'<img src="{image_url}" alt="{argument}" '
+                        f'style="max-width: 512px; width: 100%; height: auto; '
+                        f'margin-top: 8px; border-radius: 6px;">'
+                        f'</div>'
+                    )
+                return "⚠️ L’API ha risposto ma non ha fornito nessuna immagine."
+            return f"❌ Errore dall’API CES Image: {response.status_code}"
+
+        except Exception as e:
+            return f"❌ Errore nella generazione dell’immagine: {e}"
+    
     elif command == "privacy":
         return (
             "🔒 Privacy Policy:\n\n"
@@ -2953,24 +2613,9 @@ def handle_quick_commands(message, experimental_mode=False):
             "Le conversazioni sono salvate in locale. "
             "Per maggiori dettagli, consulta i Termini di Servizio."
         )
-    elif command == "cancella_conversazione":
-        # Cancella la cronologia della conversazione
-        # Assicurati che 'session' sia definito nel tuo contesto
-        # session.pop('conversation_history', None) 
-        return "🗑️ Cronologia della conversazione cancellata!"
-    elif command == "sito":
-        return "🌐 Sito ufficiale di ArcadiaAI: https://arcadiaai.netlify.app/"
-    elif command == "app":
-        return (
-            "Repository che supportano il Download Manager: \n"
-            "@flathub - scarica un'applicazione con Flathub (per linux) \n"
-            "@winget - scarica un'applicazione con Winget (per Windows)"
-        )
     
-    elif command == "crea" and argument.lower().startswith("zip"):
-        # Questa risposta è per il frontend, che poi gestirà l'upload e la chiamata all'API
-        return "Per creare uno ZIP, per favore allega i file direttamente qui in chat e poi invia di nuovo il comando `@crea zip`. Ti fornirò un link per scaricare l'archivio una volta pronto."
-
+    elif command == "cancella_conversazione":
+        return "🗑️ Cronologia della conversazione"
     elif command == "aiuto": # Questo blocco è ora il comando generico @aiuto
         return (
             "🎯 Comandi rapidi disponibili:\n\n"
@@ -3000,13 +2645,13 @@ def handle_quick_commands(message, experimental_mode=False):
             "@cesplus - Usa il modello CES Plus per risposte avanzate\n"
             "@crea zip - genera un file ZIP con file dati dall'utente\n"
             "@esporta - Esporta l'ultima conversazione in un file TXT\n"
-            "@NovaSync - Importa la una conversazione da un file TXT tramite NovaSync\n"
+            "@importa - Importa la una conversazione da un file TXT tramite NovaSync\n"
             "Per altre domande, chiedi pure!"
         )
 
     # Se nessun comando è riconosciuto
     return f"❌ Comando '{command}' non riconosciuto. Scrivi '@aiuto' per la lista dei comandi."
-
+    
 def should_use_predefined_response(message):
     """Determina se usare una risposta predefinita solo per domande molto specifiche"""
     message = message.lower().strip()
@@ -3033,7 +2678,7 @@ async def telegram_message_handler(update: Update, context: ContextTypes.DEFAULT
     }
     
     with app.test_request_context('/', json=data):
-        response = chat()
+        response = chat_route()
         reply = response.json.get("reply", "❌ Errore nella generazione della risposta")
     
     await context.bot.send_message(chat_id=chat_id, text=reply)
