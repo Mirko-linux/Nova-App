@@ -61,3 +61,10 @@ Per qualsiasi domanda o chiarimento in merito a questi Termini, puoi contattarci
 Riconoscimenti:
 
 ArcadiaAI utilizza l'API Gemini fornita da Google. Riconosciamo e rispettiamo i diritti di proprietà intellettuale di Google.
+
+## 15. Uso del nome e del logo "ArcadiaAI"
+
+L'utilizzo del nome “ArcadiaAI” e del relativo logo è consentito solo in contesti in cui il codice sorgente dell’IA non ha subito modifiche significative.
+Correzioni minori (es. bugfix, ottimizzazioni, miglioramenti di compatibilità) non impediscono l’uso del nome e del logo.
+Modifiche sostanziali che alterano il comportamento, l’architettura o gli obiettivi del progetto originale non autorizzano l’uso del nome “ArcadiaAI” né del logo associato.
+Per evitare ambiguità o uso improprio del brand, si richiede di attribuire eventuali fork o varianti con un nome e logo distinto.
