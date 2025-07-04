@@ -1,70 +1,34 @@
+<p align="center">
+  <img src="Sito web/logo_arcadia_ai.jpg" alt="Logo ArcadiaAI" width="200"/>
+</p>
 
-# Termini di Servizio di ArcadiaAI
-Data di Entrata in Vigore: 14 Maggio 2025
+<h1 align="center">ArcadiaAI</h1>
+<p align="center"><em>l'IA democratica e libera per tutti/em></p>
 
-Benvenuto/a in ArcadiaAI! Utilizzando ArcadiaAI, accetti i seguenti termini e condizioni (di seguito "Termini"). Si prega di leggere attentamente.
-## 1. Accettazione dei Termini
+**ArcadiaAI** è una piattaforma modulare per l’intelligenza artificiale conversazionale, progettata per essere libera, accessibile e sovrana.  
+Fondata da [Mirko Donato](https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI), ArcadiaAI unisce modelli principalmente open-source, interfacce leggere e backend distribuiti per offrire esperienze AI potenti e gratuite.
 
-Utilizzando ArcadiaAI, riconosci di aver letto, compreso e accettato di essere vincolato da questi Termini. Se non accetti questi Termini, non utilizzare ArcadiaAI.
-## 2. Descrizione di ArcadiaAI
+---
 
-ArcadiaAI è un chatbot gratuito e open source, distribuito sotto la licenza GNU General Public License versione 3.0 ("GNU GPL v3.0+"). Utilizza l'API di Gemini (fornita da Google) per fornire risposte e interagire con gli utenti. ArcadiaAI si basa sul nostro modello linguistico **CES**, che include le versioni ottimizzate **CES 1.5** (per la generazione di risposte) e **CES Plus** (per ragionamenti avanzati, disponibile gratuitamente).
+## 🧠 Visione
 
-ArcadiaAI è un'opera indipendente e non è sviluppato, approvato o affiliato direttamente con Google. Il codice sorgente di ArcadiaAI è disponibile pubblicamente e può essere modificato e distribuito secondo i termini della GNU GPL v3.0+.
-## 3. Utilizzo dell'API di Google
+> “L’intelligenza artificiale deve essere un bene accessibile a tutti, ArcadiaAI nasce dal desiderio di democratizzare l'Intelligenza Artificiale"
 
-ArcadiaAI utilizza l'API di Gemini di Google per fornire alcune funzionalità. Di conseguenza, l'utilizzo di ArcadiaAI è soggetto anche ai Google APIs Terms of Service e ai Gemini API Additional Terms of Service (collettivamente, i "Termini Google"). Accettando questi Termini, accetti anche di rispettare i Termini Google.
-## 4. Precedenza dei Termini di Google
-Riconosci e accetti che, in caso di conflitto tra questi Termini e i Termini Google, i Termini Google prevarranno e governeranno il tuo utilizzo dell'API di Gemini. Ciò significa che anche se una particolare attività è consentita da questi Termini, se è proibita dai Termini Google, devi astenerti da tale attività.
-## 5. Licenza d'Uso di ArcadiaAI
+ArcadiaAI nasce per sfidare i modelli proprietari e centralizzati.  
+Qui, ogni modulo è pensato per essere:
 
-ArcadiaAI è distribuito sotto la licenza GNU GPL v3.0+. Ciò significa che hai la libertà di eseguire, studiare, condividere e modificare il software, a condizione che tu rispetti i termini della licenza GNU GPL v3.0+, disponibile qui: https://www.gnu.org/licenses/gpl-3.0.it.html. I Termini della GNU GPL v3.0+ regolano l'uso del codice sorgente di ArcadiaAI, mentre questi Termini regolano il tuo utilizzo di ArcadiaAI come applicazione.
-## 6. Condotta dell'Utente
+- **Open-source**
+- **Senza barriere d’accesso**
+- **Eseguibile dal browser**
+- **Sostenibile e decentralizzato**
 
-Accetti di utilizzare ArcadiaAI in modo responsabile e in conformità con le leggi e i regolamenti applicabili. In particolare, ti impegni a non:
-- Utilizzare ArcadiaAI per scopi illegali o dannosi.
-- Violare i diritti di terzi, inclusi i diritti di proprietà intellettuale.
-- Tentare di interferire con il corretto funzionamento di ArcadiaAI o dell'API di Google.
-- Fornire informazioni false o ingannevoli.
-- Utilizzare ArcadiaAI per sviluppare modelli in concorrenza con i servizi di Google (come specificato nei Termini Google).Tentare di aggirare o disabilitare i filtri di sicurezza e moderazione del contenuto integrati in ArcadiaAI o forniti dall'API di Google, o generare contenuti in violazione dei Termini Google.
+---
 
-## 7. Esclusione di Garanzie
+## 🧩 Modelli principali
 
-ArcadiaAI è fornito "così com'è" e "come disponibile", senza garanzie di alcun tipo, esplicite o implicite, incluse, a titolo esemplificativo, garanzie di commerciabilità, idoneità per uno scopo particolare e non violazione. Non garantiamo che ArcadiaAI sarà sempre disponibile, sicuro o privo di errori.
-## 8. Limitazione di Responsabilità
-
-Nella misura massima consentita dalla legge applicabile, in nessun caso gli sviluppatori o i distributori di ArcadiaAI saranno responsabili per danni diretti, indiretti, incidentali, speciali, consequenziali o punitivi (inclusi, a titolo esemplificativo, la perdita di profitti, dati o opportunità commerciali) derivanti da o in relazione all'utilizzo o all'impossibilità di utilizzare ArcadiaAI, anche se siamo stati informati della possibilità di tali danni.
-## 9. Proprietà Intellettuale
-
-Eccetto i componenti forniti dall'API di Google (i cui diritti rimangono di Google), il codice sorgente di ArcadiaAI è pubblicato sotto la licenza GNU GPL v3.0+. Qualsiasi contenuto generato tramite ArcadiaAI è soggetto ai Termini Google e l'utente finale è responsabile della verifica dei relativi diritti di proprietà intellettuale e del suo utilizzo.
-## 10. Modifiche ai Termini
-
-Ci riserviamo il diritto di modificare questi Termini in qualsiasi momento. Ti informeremo di eventuali cambiamenti pubblicando la versione aggiornata su questa pagina o tramite altri mezzi ragionevoli. L'utilizzo continuato di ArcadiaAI dopo tali cambiamenti costituirà l'accettazione dei Termini modificati.
-## 11. Cessazione
-
-Possiamo interrompere o sospendere il tuo accesso a ArcadiaAI in qualsiasi momento, senza preavviso e per qualsiasi motivo, inclusa la violazione di questi Termini.
-## 12. Legge Applicabile e Foro Competente
-
-Questi Termini saranno regolati e interpretati in conformità con le leggi italiane, ad esclusione delle norme in materia di conflitto di leggi. Qualsiasi controversia derivante da o in relazione a questi Termini sarà sottoposta alla giurisdizione esclusiva dei tribunali.
-## 13. Collegamenti e Risorse
-
-Possiamo fornire collegamenti a siti web o risorse di terze parti per tua comodità. Non abbiamo il controllo di questi siti o risorse e non siamo responsabili del loro contenuto, accuratezza o pratiche. L'utilizzo di siti web o risorse di terze parti è a tuo rischio e pericolo.
-
-Per informazioni su come l'API Gemini di Google è utilizzata in ArcadiaAI, si prega di consultare i seguenti documenti:
-
-    Google APIs Terms of Service: https://developers.google.com/terms
-    Gemini API Additional Terms of Service: https://ai.google.dev/gemini-api/terms
-
-## 14. Contatti
-
-Per qualsiasi domanda o chiarimento in merito a questi Termini, puoi contattarci tramite novasurf26@gmail.com.
-Riconoscimenti:
-
-ArcadiaAI utilizza l'API Gemini fornita da Google. Riconosciamo e rispettiamo i diritti di proprietà intellettuale di Google.
-
-## 15. Uso del nome e del logo "ArcadiaAI"
-
-L'utilizzo del nome “ArcadiaAI” e del relativo logo è consentito solo in contesti in cui il codice sorgente dell’IA non ha subito modifiche significative.
-Correzioni minori (es. bugfix, ottimizzazioni, miglioramenti di compatibilità) non impediscono l’uso del nome e del logo.
-Modifiche sostanziali che alterano il comportamento, l’architettura o gli obiettivi del progetto originale non autorizzano l’uso del nome “ArcadiaAI” né del logo associato.
-Per evitare ambiguità o uso improprio del brand, si richiede di attribuire eventuali fork o varianti con un nome e logo distinto.
+| Modulo     | Descrizione |
+|------------|-------------|
+| **CES 360** | Interfaccia browser per LLaMA 3.3 70B, senza API key |
+| **CES Plus** | Variante di CES 360 e 1.5 progettata per i ragionamenti |
+| **CES 360e** |Versione più leggera di 360 basato su LLaMA 3.1 8B |
+---
