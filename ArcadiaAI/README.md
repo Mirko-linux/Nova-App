@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">ArcadiaAI</h1>
-<p align="center"><em>l'IA democratica e libera per tutti/em></p>
+<p align="center"><em>l'IA democratica e libera per tutti</p>
 
 **ArcadiaAI** è una piattaforma modulare per l’intelligenza artificiale conversazionale, progettata per essere libera, accessibile e sovrana.  
 Fondata da [Mirko Donato](https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI), ArcadiaAI unisce modelli principalmente open-source, interfacce leggere e backend distribuiti per offrire esperienze AI potenti e gratuite.
