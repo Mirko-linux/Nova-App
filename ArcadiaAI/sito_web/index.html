@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArcadiaAI</title>
+    <meta name="description" content="ArcadiaAI: il chatbot che fa e non chiede">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-..." crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Stili CSS aggiornati per un look più moderno e scuro */
+        body {
+            font-family: 'Poppins', sans-serif;
+            line-height: 1.7;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e; /* Sfondo scuro principale */
+            color: #e0e0e0; /* Testo chiaro per contrasto */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: auto;
+            overflow: hidden;
+            padding: 30px 0;
+        }
+        header {
+            background: #16213e; /* Scuro leggermente più chiaro del body */
+            color: #ffffff;
+            padding: 40px 0 0;
+            border-bottom: 1px solid #0f3460; /* Bordo scuro */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); /* Ombra più pronunciata */
+            text-align: center;
+            position: relative; /* Necessario per posizionare il pulsante di traduzione */
+        }
+        header .logo-container {
+            margin-bottom: 15px;
+        }
+        header .logo {
+            width: 80px;
+            height: auto;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        header h1 {
+            margin: 0;
+            padding-bottom: 10px;
+            font-size: 3em;
+            font-weight: 600;
+        }
+        header p {
+            font-size: 1.2em;
+            margin-top: 0;
+            color: #bbbbbb; /* Testo leggermente meno brillante */
+        }
+        /* Stili per la nuova navigazione */
+        nav {
+            background: #0f3460; /* Sfondo scuro per la nav */
+            padding: 15px 0;
+            margin-top: 20px; /* Spazio tra il titolo e la nav */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex; /* Rende gli elementi in linea */
+            justify-content: center; /* Centra gli elementi */
+        }
+        nav ul li {
+            margin: 0 20px;
+        }
+        nav ul li a {
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: color 0.3s ease;
+        }
+        nav ul li a:hover {
+            color: #e94560; /* Colore accento al hover */
+        }
+        .hero {
+            background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%); /* Gradiente scuro */
+            color: #ffffff;
+            text-align: center;
+            padding: 100px 0;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4); /* Ombra più forte */
+            margin-top: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero .hero-logo {
+            width: 180px;
+            height: auto;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            transform: scale(1.05);
+            filter: drop-shadow(0 0 10px rgba(0, 184, 212, 0.5)); /* Bagliore sul logo */
+        }
+        .hero h2 {
+            font-size: 3.5em;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .hero p {
+            font-size: 1.4em;
+            margin-bottom: 40px;
+        }
+        .btn {
+            display: inline-block;
+            color: #ffffff;
+            background: #e94560; /* Colore accento rosso/rosa brillante */
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s ease, transform 0.2s ease;
+            margin: 0 15px;
+            font-size: 1.1em;
+            font-weight: 600;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            border: 1px solid #e94560; /* Bordo per l'accento */
+        }
+        .btn:hover {
+            background: #b82b45; /* Tonalità più scura al hover */
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+        }
+        .features {
+            padding: 60px 0;
+            background: #16213e; /* Sfondo scuro per le sezioni */
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            margin-top: 30px;
+        }
+        .features h2 {
+            font-size: 2.8em;
+            margin-bottom: 50px;
+            color: #ffffff; /* Testo bianco */
+            font-weight: 600;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            margin-top: 40px;
+        }
+        .feature-item {
+            background: #0f3460; /* Sfondo item leggermente più scuro */
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); /* Ombra per profondità */
+            transition: transform 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.1); /* Bordo sottile chiaro */
+            display: flex; /* Flexbox per allineare icona e testo */
+            flex-direction: column;
+            align-items: center;
+        }
+        .feature-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+        }
+        .feature-item h3 {
+            color: #ffffff; /* Testo bianco */
+            font-size: 2em;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .feature-item p {
+            font-size: 1.2em;
+            color: #bbbbbb; /* Testo chiaro */
+            text-align: center;
+        }
+        /* Stili per le icone delle feature */
+        .feature-item .feature-icon {
+            font-size: 3.5em; /* Dimensione dell'icona */
+            color: #e94560; /* Colore dell'icona, uguale all'accento */
+            margin-bottom: 25px; /* Spazio sotto l'icona */
+            line-height: 1; /* Assicura che l'altezza dell'icona sia corretta */
+        }
+
+
+        /* Nuova sezione per le funzionalità future */
+        .future-features {
+            padding: 60px 0;
+            background: #0f3460; /* Sfondo leggermente diverso per distinguere */
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            margin-top: 30px;
+        }
+        .future-features h2 {
+            font-size: 2.8em;
+            margin-bottom: 50px;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        .future-features .feature-grid {
+             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Leggermente più piccoli */
+        }
+        .future-features .feature-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .future-features .feature-item .feature-icon {
+            font-size: 3.5em;
+            color: #e94560;
+            margin-bottom: 25px;
+            line-height: 1;
+        }
+
+
+        .about {
+            padding: 80px 0;
+            background: #16213e; /* Sfondo scuro per le sezioni */
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            margin-top: 30px;
+        }
+        .about h2 {
+            font-size: 2.8em;
+            margin-bottom: 30px;
+            color: #ffffff; /* Testo bianco */
+            font-weight: 600;
+        }
+        .about p {
+            font-size: 1.3em;
+            max-width: 900px;
+            margin: 0 auto;
+            color: #bbbbbb; /* Testo chiaro */
+        }
+        .faq {
+            padding: 60px 0;
+            background: #16213e;
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            margin-top: 30px;
+        }
+        .faq h2 {
+            font-size: 2.8em;
+            margin-bottom: 50px;
+            color: #ffffff;
+            font-weight: 600;
+        }
+        .faq-item {
+            background: #0f3460;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            text-align: left;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: transform 0.2s ease;
+            cursor: pointer; /* Indica che l'elemento è cliccabile */
+        }
+        .faq-item:hover {
+            transform: translateY(-3px);
+        }
+        .faq-item h3 {
+            color: #ffffff;
+            font-size: 1.8em;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-weight: 600;
+            display: flex; /* Per allineare testo e icona freccia */
+            justify-content: space-between;
+            align-items: center;
+        }
+        .faq-item .faq-arrow {
+            font-size: 0.8em; /* Dimensione della freccia */
+            transition: transform 0.3s ease;
+        }
+        .faq-item.active .faq-arrow {
+            transform: rotate(90deg); /* Ruota la freccia quando l'accordion è aperto */
+        }
+        .faq-item-content {
+            max-height: 0; /* Inizialmente nascosto */
+            overflow: hidden;
+            transition: max-height 0.5s ease-out, padding 0.3s ease-out; /* Transizione per altezza e padding */
+            padding-top: 0; /* Inizialmente nessun padding */
+        }
+        .faq-item.active .faq-item-content {
+            max-height: 500px; /* Altezza massima per mostrare il contenuto (adatta se necessario) */
+            padding-top: 15px; /* Aggiungi padding quando aperto */
+        }
+        .faq-item-content p {
+            font-size: 1.1em;
+            color: #bbbbbb;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        footer {
+            background: #0f3460; /* Footer ancora più scuro */
+            color: #ffffff;
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 50px;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+        }
+        footer p {
+            margin: 0;
+            font-size: 1em;
+        }
+        /* Media Queries per la reattività */
+        @media (max-width: 768px) {
+            .hero h2 {
+                font-size: 2.8em;
+            }
+            .hero p {
+                font-size: 1.2em;
+            }
+            .btn {
+                display: block;
+                margin: 15px auto;
+                width: 80%;
+            }
+            .features h2, .about h2, .faq h2, .future-features h2 {
+                font-size: 2.4em;
+            }
+            .feature-item {
+                padding: 30px;
+            }
+            header .logo {
+                width: 60px;
+            }
+            .hero .hero-logo {
+                width: 120px;
+            }
+            /* Media query per la nav su mobile */
+            nav ul {
+                flex-direction: column; /* Impila gli elementi verticalmente */
+                align-items: center; /* Centra gli elementi */
+            }
+            nav ul li {
+                margin: 10px 0; /* Spazio tra gli elementi impilati */
+            }
+
+            /* Posizionamento del pulsante di traduzione per mobile */
+            #translate-button-container {
+                position: static; /* Rimuove il posizionamento assoluto per il mobile */
+                text-align: center; /* Centra il pulsante se diventa un blocco */
+                margin-bottom: 20px; /* Spazio sotto il pulsante */
+            }
+            #translateButton {
+                margin-left: 0; /* Rimuove il margine sinistro */
+            }
+        }
+
+        /* Stili per il pulsante di traduzione e il suo contenitore */
+        #translate-button-container {
+            position: absolute; /* Posizionamento assoluto rispetto all'header */
+            top: 20px; /* Distanza dall'alto */
+            left: 20px; /* Distanza da sinistra */
+            z-index: 1000; /* Assicura che sia sopra gli altri elementi */
+        }
+
+        #translateButton {
+            background-color: #0f3460; /* Colore di sfondo scuro */
+            color: #ffffff; /* Testo bianco */
+            padding: 10px 15px;
+            border: 1px solid #e94560; /* Bordo colorato */
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        #translateButton:hover {
+            background-color: #1a1a2e; /* Sfondo più scuro al hover */
+            border-color: #b82b45; /* Bordo più scuro al hover */
+            transform: translateY(-2px);
+        }
+
+        /* Stili per la sezione Newsletter */
+        .newsletter-signup {
+            padding: 60px 0;
+            background: #0f3460; /* Usa un colore scuro simile alle altre sezioni */
+            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            margin-top: 30px;
+            color: #e0e0e0; /* Testo chiaro */
+        }
+
+        .newsletter-signup h2 {
+            font-size: 2.8em;
+            margin-bottom: 20px;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .newsletter-signup p {
+            font-size: 1.2em;
+            margin-bottom: 40px;
+            color: #bbbbbb;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .newsletter-signup form {
+            display: flex;
+            justify-content: center;
+            gap: 15px; /* Spazio tra input e bottone */
+            flex-wrap: wrap; /* Permette al form di andare a capo su schermi piccoli */
+        }
+
+        .newsletter-signup input[type="email"] {
+            padding: 15px 20px;
+            border: 1px solid #e94560; /* Bordo colorato come il bottone */
+            border-radius: 8px;
+            font-size: 1.1em;
+            width: 100%;
+            max-width: 350px;
+            background-color: #1a1a2e; /* Sfondo scuro per l'input */
+            color: #e0e0e0; /* Testo chiaro nell'input */
+            outline: none; /* Rimuove il contorno blu al focus */
+            transition: border-color 0.3s ease;
+        }
+
+        .newsletter-signup input[type="email"]::placeholder {
+            color: #888888; /* Colore placeholder */
+        }
+
+        .newsletter-signup input[type="email"]:focus {
+            border-color: #b82b45; /* Colore bordo al focus */
+        }
+
+        .newsletter-signup .btn {
+            padding: 15px 30px; /* Bottone con padding simile a quelli esistenti */
+            /* Gli altri stili del bottone (background, color, border-radius, etc.) verranno ereditati dalla classe .btn già definita */
+        }
+
+        /* Media Queries per la responsività del form */
+        @media (max-width: 600px) {
+            .newsletter-signup form {
+                flex-direction: column; /* Impila input e bottone verticalmente */
+                align-items: center; /* Centra gli elementi */
+            }
+            .newsletter-signup input[type="email"] {
+                max-width: 90%; /* Larghezza maggiore per l'input su mobile */
+            }
+            .newsletter-signup .btn {
+                width: 90%; /* Larghezza maggiore per il bottone su mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div id="translate-button-container">
+            <button id="translateButton">Italiano</button>
+            </div>
+
+        <div class="container">
+            <div class="logo-container">
+                <img src="logo_arcadia_ai.jpg" alt="Logo ArcadiaAI" class="logo">
+            </div>
+            <h1>ArcadiaAI</h1>
+            <p>L'IA libera per tutti</p>
+        </div>
+        <nav>
+            <div class="container">
+                <ul>
+                    <li><a href="#features">Funzionalità</a></li>
+                    <li><a href="#future-roadmap">Sviluppi Futuri</a></li>
+                    <li><a href="#arcadiaai-addon-section">ArcadiaAI Addon</a></li>
+                    <li><a href="#about">Chi Siamo</a></li>
+                    <li><a href="#faq">FAQ</a></li>
+                    <li><a href="documentazioni.html">Documentazioni</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <img src="logo_arcadia_ai.jpg" alt="Logo ArcadiaAI Grande" class="hero-logo">
+            <h2>Sperimenta il Futuro dell'Intelligenza Artificiale</h2>
+            <p>ArcadiaAI è un chatbot all'avanguardia che sfrutta il nostro sistema CES 1.5, **potenziato dalla tecnologia Gemini di Google**, e progettato per rivoluzionare il modo in cui interagisci con l'AI.</p>
+            <a href="https://arcadiaai.onrender.com/" class="btn" target="_blank" rel="noopener noreferrer">Prova il Chatbot</a>
+            <a href="https://t.me/ArcadiaAI_chatbot" class="btn" target="_blank" rel="noopener noreferrer">Prova il Bot Telegram</a>
+            <a href="https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI" class="btn" target="_blank" rel="noopener noreferrer">Guarda su GitHub</a>
+        </div>
+    </section>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2>Cosa Può Fare ArcadiaAI per Te?</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-edit"></i></div> <h3>DeepSeek R1</h3>
+                    <p>Oltre ai modelli di CES, ArcadiaAI può ricorrere anche a DeepSeek R1.</p>
+
+
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-edit"></i></div> <h3>Generazione Testuale Avanzata</h3>
+                    <p>Crea testi, riassunti, articoli, storie e qualsiasi contenuto scritto con un'accuratezza e una fluidità sorprendenti.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-download"></i></div> <h3>Download Manager</h3>
+                    <p>Ricerca e fornisce link diretti per il download di app da Flathub, rendendo l'installazione su Linux più semplice.</p>
+                </div>
+                <div class="feature-item" id="arcadiaai-addon-section">
+                    <div class="feature-icon"><i class="fas fa-puzzle-piece"></i></div> <h3>ArcadiaAI Addon</h3>
+                    <p>La piattaforma supporta l'integrazione di estensioni personalizzate, simili ai GPTs, per funzionalità illimitate e su misura.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-globe"></i></div> <h3>Ricerca sul web</h3>
+                    <p>ArcadiaAI è in grado di effettuare ricerche sul web tramite il comando "@cerca" seguito dalla query.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-file-archive"></i></div> <h3>Gestione File ZIP</h3>
+                    <p>ArcadiaAI può generare file ZIP e fornirti il download, per una gestione semplificata dei tuoi file.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-bolt"></i></div> <h3>Comandi Rapidi</h3>
+                    <p>I comandi rapidi permettono all'utente di avere una risposta immediata senza dover scrivere messaggi lunghi; per saperne di più chiedi "@aiuto" al chatbot.</p>                                                                                   
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-image"></i></div> <h3>Creazione di Immagini</h3>
+                    <p>Trasforma le tue idee in immagini mozzafiato con un semplice input testuale. Dai vita alla tua creatività con l'AI.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="future-features" id="future-roadmap">
+        <div class="container">
+            <h2>Sviluppi Futuri</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-microchip"></i></div> <h3>CES 360 Mini</h3>
+                    <p>Il nuovo modello di ArcadiaAI basato su LLaMA 3 8B sarà disponibile nei prossimi giorni.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-map-marked-alt"></i></div> <h3>Mappe aggiornate</h3>
+                    <p>Stiamo lavorando per integrare nel nostro chatbot Open Street Maps, in modo tale da permettere all'IA di aiutare gli utenti.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-code"></i></div> <h3>Generazione di codice</h3>
+                    <p>Scrive in qualunque linguaggio di programmazione (Python, C, HTML...) e rilascia all'utente il codice pronto all'uso.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon"><i class="fas fa-mobile-alt"></i></div> <h3>Integrazione con le NovaApp</h3>
+                     <p>Prossimamente ArcadiaAI sarà ben integrato con le NovaApp (Nova Surf, QuickNote, ArcadiaOS, ecc.).</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="newsletter-signup">
+        <div class="container">
+            <h2>Iscriviti alla nostra Newsletter!</h2>
+            <p>Rimani aggiornato sulle ultime novità, funzionalità e sviluppi di ArcadiaAI.</p>
+            <form action="#" method="POST" id="newsletterForm">
+                <input type="email" id="emailInput" name="email" placeholder="Inserisci la tua email" required>
+                <button type="submit" class="btn">Iscriviti</button>
+            </form>
+            <div id="newsletterMessage" style="margin-top: 20px; color: #e94560; font-weight: 600;"></div>
+        </div>
+    </section>
+
+    <section class="about" id="about">
+        <div class="container">
+            <h2>Chi Siamo</h2>
+            <p>ArcadiaAI nasce dall'idea di un giovane sviluppatore italiano, Mirko Yuri Donato, di creare un chatbot di intelligenza artificiale che sia 100% made in Italy, libero e open source.</p>
+            <p>Il progetto è in continua evoluzione, con nuove funzionalità e miglioramenti pianificati per il futuro, sempre con l'obiettivo di rendere l'AI accessibile a tutti.</p>
+        </div>
+    </section>
+
+<section class="faq" id="faq">
+    <div class="container">
+        <h2>Domande Frequenti (FAQ)</h2>
+        
+        <!-- Sezione Generale -->
+        <div class="faq-section">
+            <h3 class="faq-section-title">Informazioni Generali</h3>
+            <div class="faq-item">
+                <h3>Cos'è ArcadiaAI? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>ArcadiaAI è un chatbot multimodale avanzato che sfrutta il nostro sistema CES 1.5, <strong>potenziato dalla tecnologia Gemini 2.0 di Google</strong>, e progettato per rivoluzionare il modo in cui interagisci con l'AI. Attualmente eccelle nella generazione testuale, offrendo risposte precise e contestuali. In futuro, espanderemo le sue capacità con la creazione di immagini, la gestione di file e altre funzionalità avanzate.</p>
+                    <p>ArcadiaAI è facilmente accessibile: puoi usarlo come Bot Telegram @ArcadiaAI_chatbot o direttamente nell'editor di testo Nova QuickNote.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>È gratuito? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Sì, assolutamente! ArcadiaAI è un progetto open source e completamente gratuito da usare.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Come posso provare il chatbot? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Puoi provare ArcadiaAI andando nel primo bottone "Prova il chatbot" o se vuoi provare la versione su Telegram clicca il secondo bottone "Prova il Bot Telegram".</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>È sicuro usare ArcadiaAI? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>L'uso di ArcadiaAI è generalmente sicuro. Le tue conversazioni vengono salvate localmente sul tuo browser, non sui nostri server, garantendo maggiore privacy. Tuttavia, ti consigliamo sempre di non condividere dati personali sensibili durante le interazioni.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Come posso supportare il progetto? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Puoi contribuire allo sviluppo di ArcadiaAI condividendolo con i tuoi amici, stando sempre attento ai nuovi aggiornamenti e sperimentando tu stesso le funzionalità dell'IA.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sezione Modelli CES -->
+        <div class="faq-section">
+            <h3 class="faq-section-title">Modelli e Tecnologia</h3>
+            <div class="faq-item">
+                <h3>Cos'è CES? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>CES (Cogito Ergo Sum) è il cuore di ArcadiaAI, il modello linguistico open source su cui si basa il nostro chatbot. È distribuito sotto la licenza GNU GPL v3.0+, garantendo libertà e trasparenza. È importante notare che alcune componenti interne (come le API Key) sono invece fornite da aziende terze e, per questo motivo, sono distribuite sotto licenza proprietaria.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Sotto che licenza è distribuito il chatbot? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Il codice sorgente di ArcadiaAI è distribuito sotto la licenza GNU GPL v3.0+.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Cos'è CES 360? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>CES 360 è un nuovo modello di ArcadiaAI basato su LLaMA. Sono state annunciate le due versioni del modello, CES 360 e CES 360 Mini, che verranno implementate nei prossimi mesi.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Cos'è CES 360e? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>CES 360e (essential) è una versione più leggera di 360, basata su LLaMA 3.1 8B. CES 360e (o Mini) sarà il nuovo modello gratuito di ArcadiaAI assieme al capostipite 1.5.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Che differenza c'è tra 360 e 360e? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Entrambe le versioni di 360 (Core ed Mini) hanno le stesse funzionalità. Cambia solamente la potenza: CES 360, basandosi su LLaMA 3.3 70B, è molto più potente di CES 360e in ambito di prestazioni e potenza di calcolo, mentre la versione Mini è molto più veloce e ottimizzata per compiti semplici.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Per utilizzare i due modelli è necessario un pagamento? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>No, sia la versione Core che la versione Mini sono disponibili gratuitamente, ma è probabile che Mirko Donato imponga delle limitazioni per gli account free.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Cos'è CES Plus? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>CES Plus è un modello linguistico basato su CES 1.5 o CES 360 che offre un ragionamento più avanzato. Attualmente il modello però non è disponibile.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sezione Funzionalità -->
+        <div class="faq-section">
+            <h3 class="faq-section-title">Funzionalità e Utilizzo</h3>
+            <div class="faq-item">
+                <h3>Cosa sono gli ArcadiaAI Addon? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Gli ArcadiaAI Addon sono estensioni che permettono di espandere e personalizzare le funzionalità del chatbot, in modo simile ai GPTs, aggiungendo nuove capacità mirate alle tue esigenze.</p>
+                </div>
+            </div>
+            <div class="faq-item">
+                <h3>Come cancello la cronologia delle chat? <span class="faq-arrow">&#x25B6;</span></h3>
+                <div class="faq-item-content">
+                    <p>Attualmente, puoi cancellare le tue conversazioni su ArcadiaAI tramite il bottone "Elimina tutto". Attualmente non è possibile cancellare le singole conversazioni.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; ArcadiaAI è un software libero sotto licenza GNU GPL v3.0+.</p>
+        </div>
+    </footer>
+
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+            const translateButton = document.getElementById('translateButton');
+
+            if (translateButton) {
+                translateButton.addEventListener('click', function() {
+                    window.location.href = 'https://arcadiaai-netlify-app.translate.goog/?_x_tr_sl=it&_x_tr_tl=en&_x_tr_hl=it';
+                });
+            }
+
+            const newsletterForm = document.getElementById('newsletterForm');
+            const emailInput = document.getElementById('emailInput');
+            const newsletterMessage = document.getElementById('newsletterMessage');
+
+            if (newsletterForm) {
+                newsletterForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+
+                    const email = emailInput.value;
+
+                    if (email) {
+                        newsletterMessage.style.color = '#4CAF50';
+                        newsletterMessage.textContent = 'Grazie per esserti iscritto! Controlla la tua email per confermare.';
+                        emailInput.value = '';
+                    } else {
+                        newsletterMessage.style.color = '#e94560';
+                        newsletterMessage.textContent = 'Per favore, inserisci un indirizzo email valido.';
+                    }
+                });
+            }
+
+            // Script per la funzionalità di accordion delle FAQ
+            const faqItems = document.querySelectorAll('.faq-item');
+
+            faqItems.forEach(item => {
+                const header = item.querySelector('h3');
+                header.addEventListener('click', () => {
+                    item.classList.toggle('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

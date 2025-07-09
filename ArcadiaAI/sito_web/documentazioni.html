@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentazioni - ArcadiaAI</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Stili CSS copiati da index.html - ASSICURATI DI AVERLI COPIATI TUTTI */
+        body {
+            font-family: 'Poppins', sans-serif;
+            line-height: 1.7;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e; /* Sfondo scuro principale */
+            color: #e0e0e0; /* Testo chiaro per contrasto */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .container {
+            width: 90%;
+            max-width: 1200px; /* Adatta questo se vuoi un layout più stretto per i documenti */
+            margin: auto;
+            overflow: hidden;
+            padding: 30px 0;
+        }
+        header {
+            background: #16213e; /* Scuro leggermente più chiaro del body */
+            color: #ffffff;
+            padding: 40px 0 0;
+            border-bottom: 1px solid #0f3460; /* Bordo scuro */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); /* Ombra più pronunciata */
+            text-align: center;
+            position: relative; /* Necessario per posizionare il pulsante di traduzione */
+        }
+        header .logo-container {
+            margin-bottom: 15px;
+        }
+        header .logo {
+            width: 80px;
+            height: auto;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        header h1 {
+            margin: 0;
+            padding-bottom: 10px;
+            font-size: 3em;
+            font-weight: 600;
+        }
+        header p {
+            font-size: 1.2em;
+            margin-top: 0;
+            color: #bbbbbb; /* Testo leggermente meno brillante */
+        }
+        nav {
+            background: #0f3460; /* Sfondo scuro per la nav */
+            padding: 15px 0;
+            margin-top: 20px; /* Spazio tra il titolo e la nav */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex; /* Rende gli elementi in linea */
+            justify-content: center; /* Centra gli elementi */
+        }
+        nav ul li {
+            margin: 0 20px;
+        }
+        nav ul li a {
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: color 0.3s ease;
+        }
+        nav ul li a:hover {
+            color: #e94560; /* Colore accento al hover */
+        }
+        /* Stili per il pulsante di traduzione e il suo contenitore */
+        #translate-button-container {
+            position: absolute; /* Posizionamento assoluto rispetto all'header */
+            top: 20px; /* Distanza dall'alto */
+            left: 20px; /* Distanza da sinistra */
+            z-index: 1000; /* Assicura che sia sopra gli altri elementi */
+        }
+        #translateButton {
+            background-color: #0f3460; /* Colore di sfondo scuro */
+            color: #ffffff; /* Testo bianco */
+            padding: 10px 15px;
+            border: 1px solid #e94560; /* Bordo colorato */
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #translateButton:hover {
+            background-color: #1a1a2e; /* Sfondo più scuro al hover */
+            border-color: #b82b45; /* Bordo più scuro al hover */
+            transform: translateY(-2px);
+        }
+        /* Footer */
+        footer {
+            background: #0f3460; /* Footer ancora più scuro */
+            color: #ffffff;
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 50px;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+        }
+        footer p {
+            margin: 0;
+            font-size: 1em;
+        }
+
+        /* MEDIA QUERIES COPIATE DA index.html */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2.8em; /* Adjusted for consistency with previous updates */
+            }
+            header p {
+                font-size: 1.2em; /* Adjusted for consistency with previous updates */
+            }
+            nav ul {
+                flex-direction: column;
+                align-items: center;
+            }
+            nav ul li {
+                margin: 10px 0;
+            }
+            #translate-button-container {
+                position: static;
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            #translateButton {
+                margin-left: 0;
+            }
+        }
+        /* FINE STILI CSS COPIATI DA index.html */
+
+        /* Stili specifici per la pagina di documentazione */
+        .doc-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            gap: 15px; /* Spazio tra i pulsanti */
+            flex-wrap: wrap; /* Permette ai bottoni di andare a capo su schermi piccoli */
+        }
+        .doc-tab-button {
+            background: #0f3460; /* Colore scuro simile alla nav */
+            color: #ffffff;
+            padding: 12px 25px;
+            border: 1px solid #e94560; /* Bordo colorato */
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .doc-tab-button:hover {
+            background-color: #1a1a2e; /* Sfondo più scuro al hover */
+            border-color: #b82b45; /* Bordo più scuro al hover */
+            transform: translateY(-2px);
+        }
+        .doc-tab-button.active {
+            background-color: #e94560; /* Colore accento quando attivo */
+            border-color: #e94560;
+            transform: translateY(-2px); /* Effetto leggermente rialzato */
+        }
+
+        .doc-content {
+            background: #16213e; /* Sfondo scuro per le sezioni */
+            padding: 40px 60px; /* Più padding per il contenuto */
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            margin-top: 20px; /* Spazio tra i tab e il contenuto */
+            text-align: left; /* Allinea il testo a sinistra */
+        }
+
+        .doc-content h1, .doc-content h2, .doc-content h3 {
+            color: #ffffff;
+            font-weight: 600;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        .doc-content p, .doc-content ul, .doc-content li {
+            color: #bbbbbb;
+            font-size: 1.1em;
+            margin-bottom: 1em;
+        }
+        .doc-content a {
+            color: #e94560;
+            text-decoration: none;
+        }
+        .doc-content a:hover {
+            text-decoration: underline;
+        }
+        .doc-content ol, .doc-content ul {
+            padding-left: 25px;
+            margin-bottom: 15px;
+        }
+        .doc-content ul li {
+            list-style: disc; /* Punti neri */
+        }
+        .doc-content ol li {
+            list-style: decimal; /* Numeri */
+        }
+        .doc-section {
+            display: none;
+        }
+        .doc-section.active {
+            display: block;
+        }
+
+        /* Media Queries specifiche per i documenti */
+        @media (max-width: 768px) {
+            .doc-content {
+                padding: 20px 30px; /* Riduci il padding su mobile */
+            }
+            .doc-tabs {
+                flex-direction: column; /* Impila i pulsanti verticalmente */
+                align-items: center; /* Centra i pulsanti */
+                gap: 10px;
+            }
+            .doc-tab-button {
+                width: 80%; /* Occupa più spazio su mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div id="translate-button-container">
+            <button id="translateButton">Traduci</button>
+        </div>
+        <div class="container">
+            <div class="logo-container">
+                <img src="logo_arcadia_ai.jpg" alt="Logo ArcadiaAI" class="logo">
+            </div>
+            <h1>ArcadiaAI</h1>
+            <p>L'IA libera per tutti</p>
+        </div>
+        <nav>
+            <div class="container">
+                <ul>
+                    <li><a href="index.html#features">Funzionalità</a></li>
+                    <li><a href="index.html#future-roadmap">Sviluppi Futuri</a></li>
+                    <li><a href="index.html#arcadiaai-addon-section">ArcadiaAI Addon</a></li>
+                    <li><a href="index.html#about">Chi Siamo</a></li>
+                    <li><a href="index.html#faq">FAQ</a></li>
+                    <li><a href="documentazioni.html#tos">Documentazioni</a></li> </ul>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="doc-tabs">
+            <button class="doc-tab-button active" onclick="showDoc('tos')">Termini di Servizio</button>
+            <button class="doc-tab-button" onclick="showDoc('gpl')">Licenza GNU GPL v3.0+</button>
+            <button class="doc-tab-button" onclick="showDoc('privacy')">Privacy Policy</button>
+        </div>
+
+        <div class="doc-content">
+            <div id="tos-section" class="doc-section active">
+                <h1>Termini di Servizio di ArcadiaAI</h1>
+                <p>Data di Entrata in Vigore: 14 Maggio 2025</p>
+                <p>Benvenuto/a in ArcadiaAI! Utilizzando ArcadiaAI, accetti i seguenti termini e condizioni (di seguito "Termini"). Si prega di leggere attentamente.</p>
+
+                <h2>1. Accettazione dei Termini</h2>
+                <p>Utilizzando ArcadiaAI, riconosci di aver letto, compreso e accettato di essere vincolato da questi Termini. Se non accetti questi Termini, non utilizzare ArcadiaAI.</p>
+
+                <h2>2. Descrizione di ArcadiaAI</h2>
+                <p>ArcadiaAI è un chatbot gratuito e open source, distribuito sotto la licenza GNU General Public License versione 3.0 ("GNU GPL v3.0+"). Utilizza l'API di Gemini (fornita da Google) per fornire risposte e interagire con gli utenti. ArcadiaAI si basa sul nostro modello linguistico **CES**, che include le versioni ottimizzate **CES 1.5** (per la generazione di risposte) e **CES Plus** (per ragionamenti avanzati, disponibile gratuitamente).</p>
+                <p>ArcadiaAI è un'opera indipendente e non è sviluppato, approvato o affiliato direttamente con Google. Il codice sorgente di ArcadiaAI è disponibile pubblicamente e può essere modificato e distribuito secondo i termini della GNU GPL v3.0+.</p>
+
+                <h2>3. Utilizzo dell'API di Google</h2>
+                <p>ArcadiaAI utilizza l'API di Gemini di Google per fornire alcune funzionalità. Di conseguenza, l'utilizzo di ArcadiaAI è soggetto anche ai Google APIs Terms of Service e ai Gemini API Additional Terms of Service (collettivamente, i "Termini Google"). Accettando questi Termini, accetti anche di rispettare i Termini Google.</p>
+
+                <h2>4. Precedenza dei Termini di Google</h2>
+                <p>Riconosci e accetti che, in caso di conflitto tra questi Termini e i Termini Google, i Termini Google prevarranno e governeranno il tuo utilizzo dell'API di Gemini. Ciò significa che anche se una particolare attività è consentita da questi Termini, se è proibita dai Termini Google, devi astenerti da tale attività.</p>
+
+                <h2>5. Licenza d'Uso di ArcadiaAI</h2>
+                <p>ArcadiaAI è distribuito sotto la licenza GNU GPL v3.0+. Ciò significa che hai la libertà di eseguire, studiare, condividere e modificare il software, a condizione che tu rispetti i termini della licenza GNU GPL v3.0+, disponibile qui: <a href="https://www.gnu.org/licenses/gpl-3.0.it.html" target="_blank">https://www.gnu.org/licenses/gpl-3.0.it.html</a>. I Termini della GNU GPL v3.0+ regolano l'uso del codice sorgente di ArcadiaAI, mentre questi Termini regolano il tuo utilizzo di ArcadiaAI come applicazione.</p>
+
+                <h2>6. Condotta dell'Utente</h2>
+                <p>Accetti di utilizzare ArcadiaAI in modo responsabile e in conformità con le leggi e i regolamenti applicabili. In particolare, ti impegni a non:</p>
+                <ul>
+                    <li>Utilizzare ArcadiaAI per scopi illegali o dannosi.</li>
+                    <li>Violare i diritti di terzi, inclusi i diritti di proprietà intellettuale.</li>
+                    <li>Tentare di interferire con il corretto funzionamento di ArcadiaAI o dell'API di Google.</li>
+                    <li>Fornire informazioni false o ingannevoli.</li>
+                    <li>Utilizzare ArcadiaAI per sviluppare modelli in concorrenza con i servizi di Google (come specificato nei Termini Google).</li>
+                    <li>Tentare di aggirare o disabilitare i filtri di sicurezza e moderazione del contenuto integrati in ArcadiaAI o forniti dall'API di Google, o generare contenuti in violazione dei Termini Google.</li>
+                </ul>
+
+                <h2>7. Esclusione di Garanzie</h2>
+                <p>ArcadiaAI è fornito "così com'è" e "come disponibile", senza garanzie di alcun tipo, esplicite o implicite, incluse, a titolo esemplificativo, garanzie di commerciabilità, idoneità per uno scopo particolare e non violazione. Non garantiamo che ArcadiaAI sarà sempre disponibile, sicuro o privo di errori.</p>
+
+                <h2>8. Limitazione di Responsabilità</h2>
+                <p>Nella misura massima consentita dalla legge applicabile, in nessun caso gli sviluppatori o i distributori di ArcadiaAI saranno responsabili per danni diretti, indiretti, incidentali, speciali, consequenziali o punitivi (inclusi, a titolo esemplificativo, la perdita di profitti, dati o opportunità commerciali) derivanti da o in relazione all'utilizzo o all'impossibilità di utilizzare ArcadiaAI, anche se siamo stati informati della possibilità di tali danni.</p>
+
+                <h2>9. Proprietà Intellettuale</h2>
+                <p>Eccetto i componenti forniti dall'API di Google (i cui diritti rimangono di Google), il codice sorgente di ArcadiaAI è pubblicato sotto la licenza GNU GPL v3.0+. Qualsiasi contenuto generato tramite ArcadiaAI è soggetto ai Termini Google e l'utente finale è responsabile della verifica dei relativi diritti di proprietà intellettuale e del suo utilizzo.</p>
+
+                <h2>10. Modifiche ai Termini</h2>
+                <p>Ci riserviamo il diritto di modificare questi Termini in qualsiasi momento. Ti informeremo di eventuali cambiamenti pubblicando la versione aggiornata su questa pagina o tramite altri mezzi ragionevoli. L'utilizzo continuato di ArcadiaAI dopo tali cambiamenti costituirà l'accettazione dei Termini modificati.</p>
+
+                <h2>11. Cessazione</h2>
+                <p>Possiamo interrompere o sospendere il tuo accesso a ArcadiaAI in qualsiasi momento, senza preavviso e per qualsiasi motivo, inclusa la violazione di questi Termini.</p>
+
+                <h2>12. Legge Applicabile e Foro Competente</h2>
+                <p>Questi Termini saranno regolati e interpretati in conformità con le leggi italiane, ad esclusione delle norme in materia di conflitto di leggi. Qualsiasi controversia derivante da o in relazione a questi Termini sarà sottoposta alla giurisdizione esclusiva dei tribunali.</p>
+
+                <h2>13. Collegamenti e Risorse</h2>
+                <p>Possiamo fornire collegamenti a siti web o risorse di terze parti per tua comodità. Non abbiamo il controllo di questi siti o risorse e non siamo responsabili del loro contenuto, accuratezza o pratiche. L'utilizzo di siti web o risorse di terze parti è a tuo rischio e pericolo.</p>
+                <p>Per informazioni su come l'API Gemini di Google è utilizzata in ArcadiaAI, si prega di consultare i seguenti documenti:</p>
+                <ul>
+                    <li>Google APIs Terms of Service: <a href="https://developers.google.com/terms" target="_blank">https://developers.google.com/terms</a></li>
+                    <li>Gemini API Additional Terms of Service: <a href="https://ai.google.dev/gemini-api/terms" target="_blank">https://ai.google.dev/gemini-api/terms</a></li>
+                </ul>
+
+                <h2>14. Contatti</h2>
+                <p>Per qualsiasi domanda o chiarimento in merito a questi Termini, puoi contattarci tramite <a href="mailto:novasurf26@gmail.com">novasurf26@gmail.com</a>.</p>
+
+                <h3>Riconoscimenti:</h3>
+                <p>ArcadiaAI utilizza l'API Gemini fornita da Google. Riconosciamo e rispettiamo i diritti di proprietà intellettuale di Google.</p>
+            </div>
+
+            <div id="gpl-section" class="doc-section">
+                <h1>Licenza Pubblica Generica GNU v3.0+</h1>
+                <p>Versione 3, 29 giugno 2007</p>
+                <p>Copyright © 2007 Free Software Foundation, Inc. <a href="https://fsf.org/" target="_blank">https://fsf.org/</a></p>
+                <p>Ogni persona è autorizzata a copiare e distribuire copie testuali di questo documento di licenza, ma non è autorizzata a modificarlo.</p>
+
+                <h2>Preambolo</h2>
+                <p>La GNU General Public License è una licenza per software libero e di altro tipo di lavori.
+                La maggior parte delle licenze per software sono intese a toglierti la libertà di condividere e modificare i lavori. Al contrario, la nostra intenzione è di garantirti la libertà di condividere e modificare il software libero—di assicurare che il software sia libero per tutti i suoi utenti. Questa General Public License si applica alla maggior parte dei software della Free Software Foundation e a qualsiasi altro lavoro i cui autori si siano impegnati a utilizzarla. (Alcuni altri software della Free Software Foundation sono coperti dalla GNU Lesser General Public License.) Puoi applicarla anche ai tuoi programmi.</p>
+                <p>Quando parliamo di software libero, ci riferiamo alla libertà, non al prezzo. Le nostre General Public License sono intese ad assicurare che tu abbia la libertà di distribuire copie di software libero (e di far pagare per questo servizio se lo desideri), che tu riceva il codice sorgente o possa ottenerlo se lo desideri, che tu possa modificare il software o usarne parti in nuovi programmi liberi, e che tu sappia di poter fare queste cose.</p>
+                <p>Per proteggere i tuoi diritti, abbiamo bisogno di fare due cose: (1) applicare agli sviluppatori di software restrizioni che proibiscano loro di negarti queste libertà, e (2) richiedere che tu ceda queste stesse libertà in relazione al software ogni volta che lo distribuisci.</p>
+                <p>Per programmi che sono protetti da brevetto, intendiamo prevenire il pericolo che i distributori di un programma libero possano effettivamente negare agli utenti i loro diritti. Assicurarsi che la libertà finale di usare un programma non sia compromessa dai brevetti è ciò che intendiamo dire con l'incorporare questa Licenza.</p>
+                <p>I termini e le condizioni precise per la copia, la distribuzione e la modifica sono indicati di seguito.</p>
+
+                <h2>TERMINI E CONDIZIONI</h2>
+
+                <h3>0. Definizioni.</h3>
+                <p>“Questa Licenza” si riferisce alla versione 3 della GNU General Public License.</p>
+                <p>“Il programma” si riferisce a qualsiasi lavoro protetto da copyright licenziato sotto questa Licenza. Ogni licenziatario è indirizzato come “tu”. “Licenziatari” e “destinatari” possono essere individui o organizzazioni.</p>
+                <p>Modificare un lavoro significa copiare o adattare un lavoro in modo che, nel suo insieme, richieda l'autorizzazione del copyright per la copia o la distribuzione dell'opera modificata, al di fuori del semplice making di una copia esatta. Un lavoro risultante è chiamato “versione modificata” del lavoro precedente o un lavoro “basato” sul lavoro precedente.</p>
+                <p>Un “lavoro coperto” significa il Programma o una versione modificata del Programma.</p>
+                <p>“Propagare” un lavoro significa fare qualsiasi cosa con esso che, senza permesso, ti renderebbe direttamente o secondariamente responsabile per violazione del copyright secondo la legge applicabile sul copyright, eccetto l'esecuzione in un computer o la modifica di una copia privata. La propagazione include la copia, la modifica, la sottolicenza, la trasmissione o la distribuzione.</p>
+                <p>Un lavoro viene “conveyed” se viene propagato in modo da consentire ad altre parti di fare o ricevere copie.</p>
+                <p>Una “interfaccia Linked” significa una interfaccia di programma in cui un programma, quando viene eseguito, può inviare direttamente chiamate di funzione o richieste di dati, al fine di utilizzare un servizio fornito dall'interfaccia, oppure una interfaccia in cui un programma può inviare indirettamente chiamate di funzione o richieste di dati attraverso un programma che implementa tale interfaccia e si interfaccia a sua volta ad un altro programma che implementa tale interfaccia.</p>
+                <p>L'“informazione legale” di un lavoro significa qualsiasi avviso di copyright, brevetti o marchi, avviso che definisce il lavoro come coperto da questa Licenza, avviso che fornisce esoneri da garanzie, o qualsiasi avviso di licenza che definisce le condizioni di distribuzione del lavoro.</p>
+
+                <h3>1. Diritti.</h3>
+                <p>Ogni licenziatario ha il diritto di: eseguire il lavoro coperto; studiarlo; modificarlo; e distribuire copie del lavoro coperto, sia come è stato ricevuto che come è stato modificato, sia a titolo oneroso che gratuito.</p>
+                <p>Questi diritti sono dati per tutta la durata del copyright sul lavoro coperto.</p>
+
+                <h3>2. Condizioni.</h3>
+                <p>La tua libertà di esercitare questi diritti è soggetta alle seguenti condizioni:</p>
+                <ul>
+                    <li>(a) Tutti gli avvisi di copyright e di licenza devono essere mantenuti intatti in tutte le copie di un lavoro coperto che tu propaghi, e deve essere fornita una copia di questa Licenza con ogni copia.</li>
+                    <li>(b) Se modifichi un lavoro coperto, ogni versione modificata deve recare un avviso prominente che indichi le modifiche apportate e la data di ogni modifica.</li>
+                    <li>(c) Se distribuisci un lavoro coperto in forma eseguibile, devi fornire un mezzo per ottenere il codice sorgente corrispondente.</li>
+                    <li>(d) Tutte le versioni del lavoro coperto che distribuisci devono essere licenziate sotto questa Licenza, e devi fare in modo che qualsiasi programma che distribuisci o pubblichi sia sotto questa Licenza, e che qualsiasi programma da cui il lavoro coperto è derivato sia sotto questa Licenza.</li>
+                    <li>(e) Non puoi imporre alcun termine o condizione aggiuntivo o diverso al lavoro coperto, o imporre qualsiasi royalty o altra tassa per l'esercizio dei diritti concessi da questa Licenza.</li>
+                    <li>(f) Non puoi agire in modo tale da negare la libertà di condividere e modificare il lavoro coperto.</li>
+                </ul>
+
+                <h3>3. Brevetti.</h3>
+                <p>Se un lavoro coperto è soggetto a brevetto, devi fare in modo che chiunque riceva una copia del lavoro coperto riceva anche una licenza di brevetto che gli consenta di eseguire, studiare, modificare e distribuire il lavoro coperto. Se il lavoro coperto è soggetto a un brevetto che tu possiedi o controlli, devi fornire una licenza di brevetto che non sia discriminatoria e che sia valida per tutti gli utenti del lavoro coperto.</p>
+
+                <h3>4. Responsabilità.</h3>
+                <p>Nella misura massima consentita dalla legge applicabile, il lavoro coperto è fornito “così com'è”, senza garanzie di alcun tipo, esplicite o implicite, incluse, a titolo esemplificativo, garanzie di commerciabilità, idoneità per uno scopo particolare e non violazione.</p>
+                <p>In nessun caso gli autori o i detentori del copyright saranno responsabili per danni diretti, indiretti, incidentali, speciali, consequenziali o punitivi (inclusi, a titolo esemplificativo, la perdita di profitti, dati o opportunità commerciali) derivanti da o in relazione all'utilizzo o all'impossibilità di utilizzare il lavoro coperto.</p>
+
+                <h3>5. Conformità.</h3>
+                <p>Se non rispetti i termini e le condizioni di questa Licenza, i tuoi diritti ai sensi di questa Licenza cesseranno automaticamente.</p>
+
+                <h3>6. Emendamenti della Licenza.</h3>
+                <p>La Free Software Foundation può pubblicare versioni nuove e/o revisionate della GNU General Public License di tanto in tanto. Tali nuove versioni saranno simili nello spirito all'attuale versione, ma potrebbero differire nei dettagli per affrontare nuovi problemi o preoccupazioni. Ogni versione riceve un numero di versione distintivo.</p>
+                <p>Se il lavoro coperto specifica che può essere usato “qualsiasi versione successiva” della GNU General Public License, puoi scegliere di seguire i termini e le condizioni della versione specificata o di qualsiasi versione successiva pubblicata dalla Free Software Foundation. Se il lavoro coperto non specifica un numero di versione della GNU General Public License, puoi scegliere qualsiasi versione della GNU General Public License mai pubblicata dalla Free Software Foundation.</p>
+
+                <p>Questo è un estratto per scopi informativi. Per il testo completo e ufficiale in italiano, si prega di fare riferimento a: <a href="https://www.gnu.org/licenses/gpl-3.0.it.html" target="_blank">https://www.gnu.org/licenses/gpl-3.0.it.html</a></p>
+            </div>
+
+            <div id="privacy-section" class="doc-section">
+                <h1>Privacy Policy di ArcadiaAI</h1>
+                <p>Data di Entrata in Vigore: 14 Maggio 2025</p>
+                <p>Questa Privacy Policy descrive come ArcadiaAI (il "Servizio", "noi", "nostro") raccoglie, utilizza e protegge le tue informazioni quando utilizzi il nostro chatbot. Ci impegniamo a proteggere la tua privacy.</p>
+
+                <h2>1. Dati che Raccogliamo</h2>
+                <p>ArcadiaAI è progettato per minimizzare la raccolta di dati personali. Le tue interazioni con il chatbot sono generalmente processate nel seguente modo:</p>
+                <ul>
+                    <li>**Conversazioni Chat:** Le conversazioni tra te e ArcadiaAI vengono salvate **localmente sul tuo browser** e non vengono memorizzate sui nostri server. Puoi cancellare la cronologia delle chat eliminando i dati del browser. Non accediamo né conserviamo il contenuto delle tue conversazioni.</li>
+                    <li>**Dati forniti esplicitamente:** Per alcune funzionalità che richiedono informazioni geografiche (es. ricerca di luoghi su mappa), potremmo chiederti di fornire esplicitamente una città o un quartiere. Questi dati vengono utilizzati unicamente per elaborare la tua richiesta specifica e non vengono memorizzati a lungo termine o associati al tuo profilo. Non raccogliamo dati di geolocalizzazione automatica (es. GPS o indirizzo IP).</li>
+                    <li>**Dati di Utilizzo (Anonimizzati):** Potremmo raccogliere dati di utilizzo aggregati e anonimizzati (es. numero di utenti, funzionalità più utilizzate) per scopi statistici e di miglioramento del servizio. Questi dati non sono riconducibili a singoli individui.</li>
+                </ul>
+
+                <h2>2. Come Utilizziamo i Dati</h2>
+                <p>Utilizziamo i dati raccolti (limitati come descritto sopra) per:</p>
+                <ul>
+                    <li>Fornire e migliorare le funzionalità di ArcadiaAI.</li>
+                    <li>Rispondere alle tue richieste e fornire assistenza.</li>
+                    <li>Analizzare l'utilizzo del servizio in forma aggregata per ottimizzarlo.</li>
+                </ul>
+
+                <h2>3. Condivisione dei Dati</h2>
+                <p>ArcadiaAI non vende, affitta o condivide le tue informazioni personali (se ne raccogliamo) con terze parti per i loro scopi di marketing o commerciali. Le tue conversazioni locali non lasciano il tuo browser.</p>
+                <p>Tuttavia, ArcadiaAI utilizza l'API di Gemini di Google per fornire alcune funzionalità. Di conseguenza, alcune delle tue richieste (es. il testo che invii al chatbot) vengono processate dai server di Google. L'utilizzo dell'API di Gemini è soggetto ai <a href="https://developers.google.com/terms" target="_blank">Google APIs Terms of Service</a> e ai <a href="https://ai.google.dev/gemini-api/terms" target="_blank">Gemini API Additional Terms of Service</a>. Ti invitiamo a consultare questi documenti per comprendere come Google gestisce i dati.</p>
+
+                <h2>4. Sicurezza dei Dati</h2>
+                <p>Adottiamo misure di sicurezza ragionevoli per proteggere i pochi dati che gestiamo. Tuttavia, nessun sistema di trasmissione dati via Internet può essere garantito come sicuro al 100%. Ti consigliamo di non condividere dati personali sensibili o riservati tramite il chatbot.</p>
+
+                <h2>5. I Tuoi Diritti</h2>
+                <p>Poiché la maggior parte dei dati è gestita localmente sul tuo browser, i tuoi diritti (come il diritto di accesso, rettifica o cancellazione) possono essere esercitati principalmente tramite le impostazioni del tuo browser (es. cancellazione della cronologia e dei dati del sito).</p>
+                <p>Per qualsiasi domanda relativa alla privacy o per esercitare i tuoi diritti in relazione a dati che potremmo aver raccolto (es. tramite il modulo contatti), puoi contattarci all'indirizzo email fornito.</p>
+
+                <h2>6. Modifiche alla Privacy Policy</h2>
+                <p>Ci riserviamo il diritto di modificare questa Privacy Policy in qualsiasi momento. Ti informeremo di eventuali cambiamenti pubblicando la versione aggiornata su questa pagina. L'utilizzo continuato di ArcadiaAI dopo tali cambiamenti costituirà l'accettazione della Privacy Policy modificata.</p>
+
+                <h2>7. Contatti</h2>
+                <p>Per qualsiasi domanda o chiarimento in merito a questa Privacy Policy, puoi contattarci tramite <a href="mailto:novasurf26@gmail.com">novasurf26@gmail.com</a>.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>&copy; ArcadiaAI è un software libero sotto licenza GNU GPL v3.0+.</p>
+        </div>
+    </footer>
+
+    <script type="text/javascript">
+        // Funzione per mostrare la sezione di documentazione selezionata
+        function showDoc(docId) {
+            // Nascondi tutte le sezioni
+            const sections = document.querySelectorAll('.doc-section');
+            sections.forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Rimuovi la classe 'active' da tutti i pulsanti
+            const buttons = document.querySelectorAll('.doc-tab-button');
+            buttons.forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // Mostra la sezione desiderata e imposta il pulsante come attivo
+            document.getElementById(docId + '-section').classList.add('active');
+            // 'event.currentTarget' si riferisce al pulsante che è stato cliccato
+            // Se la funzione è chiamata direttamente, senza un evento di click, 'event' potrebbe non essere definito.
+            // Per renderlo più robusto, controlliamo se 'event' è definito prima di usarlo.
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            } else {
+                // Questo gestisce il caso in cui showDoc venga chiamata da DOMContentLoaded
+                // e garantisce che il pulsante corretto sia evidenziato.
+                const defaultButton = document.querySelector(`.doc-tab-button[onclick="showDoc('${docId}')"]`);
+                if (defaultButton) {
+                    defaultButton.classList.add('active');
+                }
+            }
+        }
+
+        // Funzione per gestire il caricamento iniziale e l'hash URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const translateButton = document.getElementById('translateButton');
+            if (translateButton) {
+                translateButton.addEventListener('click', function() {
+                    window.location.href = 'https://arcadiaai-netlify-app.translate.goog/?_x_tr_sl=it&_x_tr_tl=en&_x_tr_hl=it';
+                });
+            }
+
+            // Gestisci l'hash nell'URL per aprire una sezione specifica
+            const hash = window.location.hash.substring(1); // Rimuovi il '#'
+            if (hash && (hash === 'tos' || hash === 'gpl' || hash === 'privacy')) {
+                showDoc(hash); // Chiama showDoc con l'hash, che attiverà la sezione e il pulsante
+            } else {
+                // Se non c'è hash o l'hash non è valido, mostra la sezione ToS di default
+                showDoc('tos');
+            }
+        });
+    </script>
+</body>
+</html>
