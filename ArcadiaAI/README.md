@@ -106,7 +106,7 @@ Per poter lavorare efficacemente sul codice, assicurati di avere familiarità co
     Dal tuo terminale, clona la tua copia del repository. Sostituisci `[il-tuo-username]` con il tuo username GitHub:
 
     ```bash
-    git clone [https://github.com/](https://github.com/)[il-tuo-username]/Nova-App.git
+    git clone https://github.com/Mirko-linux/Nova-App.git
     ```
 
     Poi naviga nella cartella di ArcadiaAI:
