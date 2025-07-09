@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Sito web/logo_arcadia_ai.jpg" alt="Logo ArcadiaAI" width="200"/>
+  <img src="sr/static/logo_arcadia_ai.jpg" alt="Logo ArcadiaAI" width="200"/>
 </p>
 
 <h1 align="center">ArcadiaAI</h1>
