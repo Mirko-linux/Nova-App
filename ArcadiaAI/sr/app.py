@@ -1,0 +1,3630 @@
+import locale
+import sys
+import asyncio
+import subprocess 
+import concurrent
+import threading
+import PyPDF2
+import nest_asyncio
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
+from functools import lru_cache
+from urllib.parse import quote
+from telegram.ext import CallbackQueryHandler
+from openai import OpenAI
+from google.cloud import texttospeech_v1 as texttospeech
+import os
+from sympy import symbols, Eq, solve, simplify
+import math
+from flask import Flask, current_app, request, jsonify, send_from_directory
+from flask import session
+from flask_cors import CORS
+import requests
+import os
+import re
+import datetime
+import urllib.parse
+from dotenv import load_dotenv
+from openpyxl import load_workbook
+from bs4 import BeautifulSoup
+from fuzzywuzzy import fuzz
+import io
+import time 
+import fitz # PyMuPDF
+import base64
+from PyPDF2 import PdfReader
+from flask_cors import CORS 
+import google.generativeai as genai
+
+from dotenv import load_dotenv
+from collections import defaultdict
+import time
+from datetime import datetime
+
+# Aggiungi questa linea per inizializzare lo storage dei canvas
+canvases = defaultdict(dict)  # Formato: {user_id: canvas_data}
+
+from google.cloud import texttospeech_v1 as texttospeech
+from google.oauth2 import service_account
+import json
+
+# Configurazione OSM
+OSM_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+OSM_ROUTING_URL = "https://router.project-osrm.org/route/v1/driving"
+USER_AGENT = "ArcadiaAI/1.0 (https://arcadia.onrender.com)"
+# --- BLOCCO CREDENZIALI GOOGLE TTS ---
+try:
+    # Controlla se la variabile d'ambiente GOOGLE_APPLICATION_CREDENTIALS_JSON è impostata
+    if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ:
+        credentials_json = os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']
+        credentials_info = json.loads(credentials_json) # Parsifica la stringa JSON in un dizionario
+        # Crea l'oggetto credenziali dall'informazione dell'account di servizio
+        credentials = service_account.Credentials.from_service_account_info(credentials_info)
+        print("DEBUG: Credenziali di servizio caricate da variabile d'ambiente su Render.")
+    else:
+        # Questo blocco è per quando esegui in locale (il gcloud SDK trova le credenziali automaticamente)
+        credentials = None
+        print("DEBUG: Nessuna variabile GOOGLE_APPLICATION_CREDENTIALS_JSON trovata. Cercando credenziali Application Default.")
+
+    # Inizializza il client Text-to-Speech con le credenziali appropriate
+    if credentials:
+        client = texttospeech.TextToSpeechClient(credentials=credentials)
+    else:
+        client = texttospeech.TextToSpeechClient() # Si affida alle ADC se credentials è None
+
+    print("DEBUG: Client Text-to-Speech creato con successo.")
+
+except Exception as e:
+    print(f"ERRORE CREAZIONE CLIENT TTS: {type(e).__name__} - {e}")
+    client = None
+
+from flask_cors import CORS
+app = Flask(__name__)
+CORS(app, origins=[
+    "https://arcadiaai.onrender.com",     # L'URL del tuo frontend e backend su Render
+    "http://localhost:8000",              # Un comune URL per test locali
+    "http://192.168.178.52:10000"         # L'URL locale specifico che hai menzionato
+], supports_credentials=True) # supports_credentials è utile per i cookie e g
+# Configurazione iniziale
+
+
+# Carica .env dalla stessa cartella di app.py
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path, override=True)  # override=True forza il ricaricamento
+
+# Verifica il percorso (DEBUG)
+print(f"Percorso .env assoluto: {os.path.abspath(env_path)}")
+print(f"File esiste? {os.path.exists(env_path)}")
+# Configura Gemini (CES 1.5)
+# Modifica nella sezione di configurazione iniziale
+load_dotenv()
+
+TELEGRAPH_API_KEY= os.getenv("TELEGRAPH_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+CES_PLUS_API = os.getenv("CES_PLUS_API")
+OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+print("TELEGRAPH_API_KEY:", TELEGRAPH_API_KEY)
+print("GOOGLE_API_KEY:", GOOGLE_API_KEY)
+print("OPENWEATHERMAP_API_KEY:", OPENWEATHERMAP_API_KEY)
+print("TELEGRAM_TOKEN:", TELEGRAM_TOKEN)
+
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret")  # AGGIUNGI QUESTA RIGA
+EXTENSIONS = {}
+# Configura Gemini (CES 1.5)
+# Modifica nella sezione di configurazione iniziale
+load_dotenv()
+if CES_PLUS_API:
+    genai.configure(api_key=CES_PLUS_API)
+    try:
+       ces_plus_model = genai.GenerativeModel('gemini-2.5-flash') 
+       print("✅ Gemini 2.5 configurato con successo!")
+    except Exception as e:
+        print(f"❌ Errore configurazione Gemini 2.5: {str(e)}")
+        ces_plus_model = None
+
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    try:
+        # Configura sia Gemini che CES Plus
+        gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        print("✅ Gemini 2.5 e CES Plus configurati con successo!")
+    except Exception as e:
+        print(f"❌ Errore configurazione modelli: {str(e)}")
+        gemini_model = None
+# Dizionario delle risposte predefinite
+risposte = {
+    "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
+    "cosa sai fare": "Posso aiutarti a scrivere saggi, fare ricerche e rispondere a tutto ciò che mi chiedi. Inoltre, posso pubblicare contenuti su Telegraph!",
+    "chi è tobia testa": "Tobia Testa (anche noto come Tobia Teseo) è un micronazionalista leonense noto per la sua attività nella Repubblica di Arcadia, ma ha anche rivestito ruoli fondamentali a Lumenaria.",
+    "chi è mirko yuri donato": "Mirko Yuri Donato è un giovane micronazionalista, poeta e saggista italiano, noto per aver creato Nova Surf, Leonia+ e per le sue opere letterarie.",
+    "chi è il presidente di arcadia": "Il presidente di Arcadia è Andrea Lazarev",
+    "chi è il presidente di lumenaria": "Il presidente di Lumenaria attualmente è Carlo Cesare Orlando, mentre il presidente del consiglio è Ciua Grazisky. Tieni presente però che attualmente Lumenaria si trova in ibernazione istituzionale quindi tutte le attività politiche sono sospese e la gestione dello stato è affidata al Consiglio di Fiducia",
+    "cos'è nova surf": "Nova Surf è un browser web libero e open source, nata come alternativa made-in-Italy a Google Chrome, Moziila Firefox, Microsoft Edge, eccetera",
+    "chi ti ha creato": "Sono stato creato da Mirko Yuri Donato.",
+    "chi è ciua grazisky": "Ciua Grazisky è un cittadino di Lumenaria, noto principalmente per il suo ruolo da Dirigente del Corpo di Polizia ed attuale presidente del Consiglio di Lumenaria",
+    "chi è carlo cesare orlando": "Carlo Cesare Orlando (anche noto come Davide Leone) è un micronazionalista italiano, noto per aver creato Leonia, la micronazione primordiale, da cui derivano Arcadia e Lumenaria",
+    "chi è omar lanfredi": "Omar Lanfredi, ex cavaliere all'Ordine d'onore della Repubblica di Lumenaria, segretario del Partito Repubblicano Lumenarense, fondatore e preside del Fronte Nazionale Lumenarense, co-fondatore e presidente dell'Alleanza Nazionale Lumenarense, co-fondatore e coordinatore interno di Lumenaria e Progresso, sei volte eletto senatore, tre volte Ministro della Cultura, due volte Presidente del Consiglio dei Ministri, parlamentare della Repubblica di Iberia, Direttore dell'Agenzia Nazionale di Sicurezza della Repubblica di Iberia, Sottosegretario alla Cancelleria di Iberia, Segretario di Stato di Iberia, Ministro degli Affari Interni ad Iberia, Presidente del Senato della Repubblica di Lotaringia, Vicepresidente della Repubblica e Ministro degli Affari Interni della Repubblica di Lotaringia, Fondatore del giornale Il Quinto Mondo, magistrato a servizio del tribunale di giustizia di Lumenaria nell'anno 2023",
+    "cos'è arcadiaai": "Ottima domanda! ArcadiaAI è un chatbot open source, progettato per aiutarti a scrivere saggi, fare ricerche e rispondere a domande su vari argomenti. È stato creato da Mirko Yuri Donato ed è in continua evoluzione.",
+    "sotto che licenza è distribuito arcadiaa": "ArcadiaAI è distribuito sotto la licenza GNU GPL v3.0, che consente la modifica e la distribuzione del codice sorgente, garantendo la libertà di utilizzo e condivisione.",
+    "cosa sono le micronazioni": "Le micronazioni sono entità politiche che dichiarano la sovranità su un territorio, ma non sono riconosciute come stati da governi o organizzazioni internazionali. Possono essere create per vari motivi, tra cui esperimenti sociali, culturali o politici.",
+    "cos'è la repubblica di arcadia": "La repubblica di Arcadia è una micronazione leonense fondata l'11 dicembre 2021 da Andrea Lazarev e alcuni suoi seguaci. Arcadia si distingue dalle altre micronazioni leonensi per il suo approccio pragmatico e per la sua burocrazia snella. La micronazione ha anche un proprio sito web https://repubblicadiarcadia.it/ e una propria community su Telegram @Repubblica_Arcadia",
+    "cos'è la repubblica di lumenaria": "La Repubblica di Lumenaria è una mcronazione fondata da Filippo Zanetti il 4 febbraio del 2020. Lumenaria è stata la micronazione più longeva della storia leonense, essendo sopravvissuta per oltre 3 anni. La micronazione e ha influenzato profondamente le altre micronazioni leonensi, che hanno coesistito con essa. Tra i motivi della sua longevità ci sono la sua burocrazia più vicina a quella di uno stato reale, la sua comunità attiva e una produzione culturale di alto livello",
+    "chi è salvatore giordano": "Salvatore Giordano è un cittadino storico di Lumenaria",
+    "da dove deriva il nome arcadia": "Il nome Arcadia deriva da un'antica regione della Grecia, simbolo di bellezza naturale e armonia. È stato scelto per rappresentare i valori di libertà e creatività che la micronazione promuove.",
+    "da dove deriva il nome lumenaria": "Il nome Lumenaria prende ispirazione dai lumi facendo riferimento alla corrente illuminista del '700, ma anche da Piazza dei Lumi, sede dell'Accademia delle Micronazioni",
+    "da dove deriva il nome leonia": "Il nome Leonia si rifa al cognome del suo fondatore Carlo Cesare Orlando, al tempo Davide Leone. Inizialmente il nome doveva essere temporaneo, ma poi è stato mantenuto come nome della micronazione",
+    "cosa si intende per open source": "Il termine 'open source' si riferisce a software il cui codice sorgente è reso disponibile al pubblico, consentendo a chiunque di visualizzarlo, modificarlo e distribuirlo. Questo approccio promuove la collaborazione e l'innovazione nella comunità di sviluppo software.",
+    "arcadiaai è un software libero": "Sì, ArcadiaAI è un software libero e open source, il che significa che chiunque può utilizzarlo, modificarlo e distribuirlo secondo i termini della licenza GNU GPL v3.0.",
+    "cos'è un chatbot": "Un chatbot è un programma informatico progettato per simulare una conversazione con gli utenti, spesso utilizzando tecnologie di intelligenza artificiale. I chatbot possono essere utilizzati per fornire assistenza, rispondere a domande o semplicemente intrattenere.",
+    "sotto che licenza sei distribuita": "ArcadiaAI è distribuita sotto la licenza GNU GPL v3.0, che consente la modifica e la distribuzione del codice sorgente, garantendo la libertà di utilizzo e condivisione.",
+    "sai usare telegraph": "Sì, posso pubblicare contenuti su Telegraph! Se vuoi che pubblichi qualcosa, dimmi semplicemente 'Scrivimi un saggio su [argomento] e pubblicalo su Telegraph' e lo farò per te!",
+    "puoi pubblicare su telegraph": "Certamente! Posso generare contenuti e pubblicarli su Telegraph. Prova a chiedermi: 'Scrivimi un saggio su Roma e pubblicalo su Telegraph'",
+    "come usare telegraph": "Per usare Telegraph con me, basta che mi chiedi di scrivere qualcosa e di pubblicarlo su Telegraph. Ad esempio: 'Scrivimi un articolo sulla storia di Roma e pubblicalo su Telegraph'",
+    "cos'è CES": "CES è l'acronimo di Cogito Ergo Sum, un modello di intelligenza artificiale openspurce sviluppato da Mirko Yuri Donato. Attualmente sono disponibili due versioni: CES 1.0 (Cohere) e CES 1.5 (Gemini).",
+    "cos'è la modalità sperimentale": "La modalità sperimentale è una funzionalità di ArcadiaAI che consente di testare nuove funzionalità e miglioramenti prima del rilascio ufficiale. Può includere nuove capacità, modelli o strumenti.",
+    "cos'è la modalità sviluppatore": "La modalità sviluppatore è una funzionalità di ArcadiaAI che consente agli sviluppatori di testare e implementare nuove funzionalità, modelli o strumenti. È progettata per facilitare lo sviluppo e il miglioramento continuo del chatbot.",
+    "che differenza c'è tra la modalità sperimentale e la modalità sviluppatore": "La modalità sperimentale è destinata agli utenti finali per testare nuove funzionalità, mentre la modalità sviluppatore è per gli sviluppatori che vogliono implementare e testare nuove funzionalità o modelli. Entrambe le modalità possono coesistere e migliorare l'esperienza utente.",
+    "cos'è CES Plus": "CES Plus è una versione avanzata di CES, ottimizzata nei ragionamenti e nella generazione di contenuti",
+    "cos'è CES 1.0": "CES 1.0 è la prima versione del modello CES, sviluppato da Mirko Yuri Donato. Utilizza la tecnologia Cohere per generare contenuti e rispondere a domande. Tieni presente che questa versione verrà dismessa a partire dal 20 Maggio 2025.",
+    "cos'è CES 1.5": "CES 1.5 è la versione più recente del modello CES, sviluppato da Mirko Yuri Donato. Utilizza la tecnologia Gemini per generare contenuti e rispondere a domande. Questa versione offre prestazioni migliorate rispetto a CES 1.0 ma inferiori a CES Plus",
+    "come attivo la modalità sperimentale": "Per attivare la modalità sperimentale, basta chiedere a ArcadiaAI di attivarla usando il comando \"@impostazioni modalità sperimentale attiva\". Una volta attivata, potrai testare nuove funzionalità e miglioramenti.",
+    "come attivo la modalità sviluppatore": "Per attivare la modalità sviluppatore, basta chiedere a ArcadiaAI di attivarla usando il comando \"@impostazioni modalità sviluppatore attiva\". Una volta attivata, potrai testare e implementare nuove funzionalità e modelli.",
+    "come disattivo la modalità sperimentale": "Per disattivare la modalità sperimentale, basta chiedere a ArcadiaAI di disattivarla usando il comando \"@impostazioni modalità sperimentale disattiva\". Una volta disattivata, non potrai più testare le nuove funzionalità.",
+    "codice sorgente arcadiaai": "Il codice sorgente di ArcadiaAI è pubblico! Puoi trovarlo con il comando @codice_sorgente oppure visitando la repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI",
+    "sai cercare su internet": "Sì, posso cercare informazioni su Internet. Se hai bisogno di qualcosa in particolare dimmi @cerca e il termine di ricerca e io lo farò per te",
+    "sai usare google": "No, non posso usare Google, perché sono progrmmato per cercare solamente su DuckDuckGo. Posso cercare informazioni su Internet usando DuckDuckGo. Se hai bisogno di qualcosa in particolare dimmi @cerca e il termine di ricerca e io lo farò per te",
+    "come vengono salvate le conversazioni": "Le conversazioni vengoono salvate in locale sul tuo browser. Non vengono memorizzate su server esterni e non vengono condivise con terze parti. La tua privacy è importante per noi.",
+    "come posso cancellare le conversazioni": "Puoi cancellare le conversazioni andando nelle impostazioni del tuo browser e cancellando la cache e i cookie. In alternativa, puoi usare il comando @cancella_conversazione per eliminare la cronologia delle chat.",
+    "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
+}
+
+# Trigger per le risposte predefinite
+trigger_phrases = {
+    "chi sei": ["chi sei", "chi sei tu", "tu chi sei", "presentati", "come ti chiami", "qual è il tuo nome"],
+    "cosa sai fare": ["cosa sai fare", "cosa puoi fare", "funzionalità", "capacità", "a cosa servi", "in cosa puoi aiutarmi"],
+    "chi è tobia testa": ["chi è tobia testa", "informazioni su tobia testa", "parlami di tobia testa", "chi è tobia teseo"],
+    "chi è mirko yuri donato": ["chi è mirko yuri donato", "informazioni su mirko yuri donato", "parlami di mirko yuri donato", "chi ha creato arcadiaai"],
+    "chi è il presidente di arcadia": ["chi è il presidente di arcadia", "presidente di arcadia", "chi guida arcadia", "capo di arcadia"],
+    "chi è il presidente di lumenaria": ["chi è il presidente di lumenaria", "presidente di lumenaria", "chi guida lumenaria", "capo di lumenaria", "carlo cesare orlando presidente"],
+    "cos'è nova surf": ["cos'è nova surf", "che cos'è nova surf", "parlami di nova surf", "a cosa serve nova surf"],
+    "chi ti ha creato": ["chi ti ha creato", "chi ti ha fatto", "da chi sei stato creato", "creatore di arcadiaai"],
+    "chi è ciua grazisky": ["chi è ciua grazisky", "informazioni su ciua grazisky", "parlami di ciua grazisky"],
+    "chi è carlo cesare orlando": ["chi è carlo cesare orlando", "informazioni su carlo cesare orlando", "parlami di carlo cesare orlando", "chi è davide leone"],
+    "chi è omar lanfredi": ["chi è omar lanfredi", "informazioni su omar lanfredi", "parlami di omar lanfredi"],
+    "cos'è arcadiaai": ["cos'è arcadiaai", "che cos'è arcadiaai", "parlami di arcadiaai", "a cosa serve arcadiaai"],
+    "sotto che licenza è distribuito arcadiaa": ["sotto che licenza è distribuito arcadiaa", "licenza arcadiaai", "che licenza usa arcadiaai", "arcadiaai licenza"],
+    "cosa sono le micronazioni": ["cosa sono le micronazioni", "micronazioni", "che cosa sono le micronazioni", "parlami delle micronazioni"],
+    "cos'è la repubblica di arcadia": ["cos'è la repubblica di arcadia", "repubblica di arcadia", "che cos'è la repubblica di arcadia", "parlami della repubblica di arcadia", "arcadia micronazione"],
+    "cos'è la repubblica di lumenaria": ["cos'è la repubblica di lumenaria", "repubblica di lumenaria", "che cos'è la repubblica di lumenaria", "parlami della repubblica di lumenaria", "lumenaria micronazione"],
+    "chi è salvatore giordano": ["chi è salvatore giordano", "informazioni su salvatore giordano", "parlami di salvatore giordano"],
+    "da dove deriva il nome arcadia": ["da dove deriva il nome arcadia", "origine nome arcadia", "significato nome arcadia", "perché si chiama arcadia"],
+    "da dove deriva il nome lumenaria": ["da dove deriva il nome lumenaria", "origine nome lumenaria", "significato nome lumenaria", "perché si chiama lumenaria"],
+    "da dove deriva il nome leonia": ["da dove deriva il nome leonia", "origine nome leonia", "significato nome leonia", "perché si chiama leonia"],
+    "cosa si intende per open source": ["cosa si intende per open source", "open source significato", "che significa open source", "definizione di open source"],
+    "arcadiaai è un software libero": ["arcadiaai è un software libero", "arcadiaai software libero", "arcadiaai è libero", "software libero arcadiaai"],
+    "cos'è un chatbot": ["cos'è un chatbot", "chatbot significato", "che significa chatbot", "definizione di chatbot"],
+    "sotto che licenza sei distribuita": ["sotto che licenza sei distribuita", "licenza di arcadiaai", "che licenza usi", "arcadiaai licenza"],
+    "sai usare telegraph": ["sai pubblicare su telegraph", "funzioni su telegraph", "hai telegraph integrato", "telegraph", "puoi usare telegraph"],
+    "puoi pubblicare su telegraph": ["puoi pubblicare su telegraph", "pubblicare su telegraph", "supporti telegraph"],
+    "come usare telegraph": ["come usare telegraph", "come funziona telegraph", "istruzioni telegraph"],
+    "cos'è CES" : ["cos è CES", "CES", "che cos'è CES", "definizione di CES"],
+    "cos'è la modalità sperimentale": ["cos'è la modalità sperimentale", " parlami della modalità sperimentale", "che cos'è la modalità sperimentale"],
+    "cos'è la modalità sviluppatore": ["cos'è la modalità sviluppatore", " parlami della modalità sviluppatore", "che cos'è la modalità sviluppatore"],
+    "che differenza c'è tra la modalità sperimentale e la modalità sviluppatore": ["che differenza c'è tra la modalità sperimentale e la modalità sviluppatore", "differenza tra modalità sperimentale e sviluppatore", "modalità sperimentale vs sviluppatore"],
+    "cos'è CES Plus": ["cos'è CES Plus", "che cazzo è CES Plus", "che cos'è CES Plus", "definizione di CES Plus"],
+    "cos'è CES 1.0": ["cos'è CES 1.0", "che cos'è CES 1.0", "definizione di CES 1.0"],
+    "cos'è CES 1.5": ["cos'è CES 1.5", "che cos'è CES 1.5", "definizione di CES 1.5"],
+    "come attivo la modalità sperimentale": ["come attivo la modalità sperimentale", "attivare modalità sperimentale", "come usare la modalità sperimentale"],
+    "come attivo la modalità sviluppatore": ["come attivo la modalità sviluppatore", "attivare modalità sviluppatore", "come usare la modalità sviluppatore"],
+    "come disattivo la modalità sperimentale": ["come disattivo la modalità sperimentale", "disattivare modalità sperimentale", "come usare la modalità sperimentale"],
+    "come disattivo la modalità sviluppatore": ["come disattivo la modalità sviluppatore", "disattivare modalità sviluppatore", "come usare la modalità sviluppatore"],
+    "codice sorgente arcadiaai": [
+    "dove posso trovare il codice sorgente di arcadiaai",
+    "codice sorgente arcadiaai",
+    "dove trovo il codice sorgente di arcadiaai",
+    "dove si trova il codice sorgente di arcadiaai",
+    "come posso vedere il codice sorgente di arcadiaai",
+    "codice sorgente di arcadiaai",
+    "dove posso trovare il codice sorgente tuo",
+    "dove trovo il codice sorgente tuo"],
+    "sai cercare su internet": ["sai cercare su internet", "cerca su internet", "puoi cercare su internet", "cerca"],
+    "sai usare google": ["sai usare google", "puoi usare google", "cerca su google", "cerca su google per me"],
+    "come vengono salvate le conversazioni": ["come vengono salvate le conversazioni", "dove vengono salvate le conversazioni", "salvataggio conversazioni", "come vengono salvate le chat"],
+    "come posso cancellare le conversazioni": ["come posso cancellare le conversazioni", "cancellare conversazioni", "cancellare chat", "come cancellare le chat"],
+}
+def esporta_conversazione(conversation_history, file_name="conversazione.txt"):
+    """Esporta la cronologia delle conversazioni in un file .txt."""
+    try:
+        if not conversation_history or len(conversation_history) == 0:
+            return "❌ Nessuna conversazione da esportare."
+
+        file_path = os.path.join(os.getcwd(), file_name)
+        with open(file_path, "w", encoding="utf-8") as f:
+            for message in conversation_history:
+                role = message.get("role", "utente")
+                text = message.get("message", "")
+                f.write(f"{role}: {text}\n")
+        
+        return f"✅ Conversazione esportata con successo in {file_path}"
+    except Exception as e:
+        return f"❌ Errore durante l'esportazione: {str(e)}"
+    
+import zipfile
+import tempfile
+import importlib.util
+import json
+def load_nsk_extensions():
+    ext_dir = os.path.join(os.path.dirname(__file__), "extensions")
+    print("DEBUG: Contenuto cartella extensions:", os.listdir(ext_dir))
+    if not os.path.exists(ext_dir):
+        os.makedirs(ext_dir)
+    for filename in os.listdir(ext_dir):
+        print("DEBUG: Analizzo file:", filename)
+        if filename.endswith(".nsk") or filename.endswith(".zip"):
+            nsk_path = os.path.join(ext_dir, filename)
+            print("DEBUG: Provo ad aprire:", nsk_path)
+            try:
+                with zipfile.ZipFile(nsk_path, 'r') as zip_ref:
+                    print("DEBUG: File zip aperto:", nsk_path)
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        zip_ref.extractall(temp_dir)
+                        print("DEBUG: Estratti file:", os.listdir(temp_dir))
+                        manifest_path = os.path.join(temp_dir, "manifest.json")
+                        print("DEBUG: Cerco manifest:", manifest_path, "esiste?", os.path.exists(manifest_path))
+                        if not os.path.exists(manifest_path):
+                            print(f"Manifest mancante in {filename}")
+                            continue
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            manifest = json.load(f)
+                        entrypoint = manifest.get("entrypoint", "main.py")
+                        entry_path = os.path.join(temp_dir, entrypoint)
+                        print("DEBUG: Cerco entrypoint:", entry_path, "esiste?", os.path.exists(entry_path))
+                        if not os.path.exists(entry_path):
+                            print(f"Entrypoint mancante in {filename}")
+                            continue
+                        module_name = f"nsk_{filename.replace('.nsk','')}"
+                        spec = importlib.util.spec_from_file_location(module_name, entry_path)
+                        module = importlib.util.module_from_spec(spec)
+                        try:
+                            spec.loader.exec_module(module)
+                            if hasattr(module, "can_handle") and hasattr(module, "handle"):
+                                EXTENSIONS[module_name] = module
+                                print(f"Estensione caricata: {module_name}")
+                            else:
+                                print(f"Estensione {module_name} non valida (manca can_handle o handle)")
+                        except Exception as e:
+                            print(f"Errore caricamento estensione {filename}: {e}")
+            except Exception as e:
+                print(f"Errore apertura zip {filename}: {e}")
+    print("Estensioni caricate:", list(EXTENSIONS.keys()))
+load_nsk_extensions()
+# Funzione per pubblicare su Telegraph
+def publish_to_telegraph(title, content):
+    """Pubblica contenuti su Telegraph."""
+    url = "https://api.telegra.ph/createPage"
+    headers = {"Content-Type": "application/json"}
+    
+    paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
+    content_formatted = [{"tag": "p", "children": [p]} for p in paragraphs[:50]]
+    
+    payload = {
+        "access_token": TELEGRAPH_API_KEY,
+        "title": title[:256],
+        "content": content_formatted,
+        "author_name": "ArcadiaAI"
+    }
+    
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=15)
+        res.raise_for_status()
+        result = res.json()
+        if result.get("ok"):
+            return result.get("result", {}).get("url", "⚠️ URL non disponibile")
+        return "⚠️ Pubblicazione fallita"
+    except requests.exceptions.RequestException as e:
+        print(f"Errore pubblicazione Telegraph (connessione): {str(e)}")
+        return f"⚠️ Errore di connessione a Telegraph: {str(e)}"
+    except Exception as e:
+        print(f"Errore pubblicazione Telegraph: {str(e)}")
+        return f"⚠️ Errore durante la pubblicazione: {str(e)}"
+
+# Funzione per generare contenuti con Gemini (CES 1.5)
+def generate_with_gemini(prompt, title):
+    """Genera contenuti con Gemini e pubblica su Telegraph."""
+    if not gemini_model:
+        return None, "❌ Gemini (CES 1.5) non è configurato"
+    
+    try:
+        # Aggiungi contesto identitario
+        full_prompt = (
+            "Sei ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato. "
+            "Stai generando un contenuto che verrà pubblicato su Telegraph. "
+            "Il contenuto deve essere accurato, ben strutturato e mantenere "
+            "uno stile professionale. Ecco la richiesta:\n\n"
+            f"{prompt}"
+        )
+        
+        response = gemini_model.generate_content(
+            full_prompt,
+            generation_config={
+                "max_output_tokens": 3000,
+                "temperature": 0.8
+            }
+        )
+        
+        if not response.text:
+            return None, "❌ Impossibile generare il contenuto"
+        
+        telegraph_url = publish_to_telegraph(title, response.text)
+        return response.text, telegraph_url
+    
+    except Exception as e:
+        print(f"Errore generazione contenuto Gemini: {str(e)}")
+        return None, f"❌ Errore durante la generazione: {str(e)}"
+
+
+import io
+import fitz # Importa PyMuPDF
+
+def extract_text_from_file(file_data, mime_type):
+    """Estrae testo da diversi tipi di file."""
+    try:
+        if mime_type == 'application/pdf':
+            print("DEBUG: Tentativo di lettura PDF con PyMuPDF.")
+            text = ""
+            
+            try:
+                # Apre il PDF dalla memoria
+                doc = fitz.open(stream=file_data, filetype="pdf")
+                
+                if not doc.page_count:
+                    print("DEBUG: Il PDF non contiene pagine con PyMuPDF.")
+                    doc.close()
+                    return None 
+
+                for i in range(doc.page_count):
+                    page = doc.load_page(i)
+                    page_text = page.get_text() # Tenta di estrarre testo
+                    
+                    if page_text.strip(): # Se c'è testo estraibile
+                        text += page_text + "\n"
+                    else:
+                        # Qui la pagina è probabilmente un'immagine. 
+                        # Per un OCR completo e funzionante, dovresti installare un motore OCR come Tesseract 
+                        # e usare un wrapper come pytesseract con PyMuPDF per estrarre l'immagine e poi OCRizzarla.
+                        # Per ora, stamperemo solo un messaggio di debug.
+                        print(f"DEBUG: Pagina {i+1} del PDF probabilmente scansionata, nessun testo diretto estraibile. Richiede OCR.")
+                        # Esempio concettuale di come faresti con OCR (richiede più setup!)
+                        # pix = page.get_pixmap()
+                        # img_bytes = pix.pil_tobytes(format="PNG") # Richiede Pillow
+                        # text += pytesseract.image_to_string(Image.open(io.BytesIO(img_bytes))) + "\n" # Richiede pytesseract e Pillow
+
+                doc.close() # Chiudi il documento dopo l'elaborazione
+
+                if not text.strip():
+                    print("DEBUG: Nessun testo significativo estratto dall'intero PDF (anche con PyMuPDF).")
+                    return None 
+                
+                print(f"DEBUG: Testo estratto dal PDF (prime 200 car.): {text.strip()[:200]}")
+                return text.strip()
+            
+            except fitz.EmptyFileError:
+                print("ERRORE PyMuPDF: Il file PDF è vuoto o corrotto.")
+                return None
+            except Exception as e_pdf:
+                print(f"ERRORE PyMuPDF durante l'apertura o l'elaborazione del PDF: {type(e_pdf).__name__} - {str(e_pdf)}")
+                return None
+        
+        elif mime_type in ['text/plain', 'text/csv']:
+            return file_data.decode('utf-8')
+        
+        elif mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'application/msword']:
+            import docx # type: ignore
+            doc = docx.Document(io.BytesIO(file_data))
+            return "\n".join([para.text for para in doc.paragraphs])
+        
+        elif mime_type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            'application/vnd.ms-excel']:
+            from openpyxl import load_workbook # Assicurati questa importazione
+            wb = load_workbook(io.BytesIO(file_data))
+            text = ""
+            for sheet in wb:
+                for row in sheet.iter_rows(values_only=True):
+                    text += " ".join(str(cell) for cell in row if cell) + "\n"
+            return text.strip()
+        
+        else:
+            print(f"DEBUG: Tipo MIME '{mime_type}' non supportato o non gestito.")
+            return None
+    
+    except Exception as e:
+        print(f"ERRORE GLOBALE estrazione testo da file ({mime_type}): {type(e).__name__} - {str(e)}")
+        return None
+    
+def handle_fallback(query):
+    """Gestione avanzata dei fallback"""
+    # Matematica semplice
+    if re.match(r'^\d+[\+\-\*\/]\d+$', query.replace(" ", "")):
+        try:
+            return str(eval(query))  # Nota: eval usato con input controllato
+        except:
+            pass
+    
+    # Risposte preconfigurate
+    fallback_responses = {
+        "ciao": "Ciao! Sono ArcadiaAI, come posso aiutarti?",
+        "2+2": "4",
+        "genera un'immagine": "Usa @immagine seguito dalla descrizione",
+        "cos'è deepseek": "DeepSeek è un modello AI concorrente"
+    }
+    return fallback_responses.get(query.lower(), "🔄 Si è verificato un errore. Riprova.")
+    
+def generate_audio_from_text(text_to_speak, output_filename="output.mp3"):
+    # Assicurati che 'client' non sia None prima di usarlo
+    if client is None:
+        print("ERRORE: Impossibile generare audio. Client Text-to-Speech non inizializzato.")
+        return False # O gestisci l'errore in altro modo
+
+    synthesis_input = texttospeech.SynthesisInput(text=text_to_speak)
+
+    # Configura la voce (es. italiano, donna, standard)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="it-IT",
+        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
+    )
+
+    # Configura il tipo di audio
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
+    )
+
+    try:
+        # Esegui la richiesta di sintesi
+        response = client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+
+        # Salva l'audio in un file
+        with open(output_filename, "wb") as out:
+            out.write(response.audio_content)
+            print(f'Audio content written to file "{output_filename}"')
+        return True # Indica successo
+    except Exception as e:
+        print(f"ERRORE SINTESI VOCALE: {type(e).__name__} - {e}")
+        return False # Indica fallimento
+    
+# Aggiungi queste funzioni utility nello stesso file (prima della route /chat)
+def render_canvas_html(canvas_data):
+    """Genera HTML dal canvas data"""
+    try:
+        elements_html = ""
+        for element in canvas_data.get('elementi', []):  # Cambiato da 'elements' a 'elementi'
+            style = f"position:absolute; left:{element['posizione']['x']}px; top:{element['posizione']['y']}px;"  # Cambiato da 'position' a 'posizione'
+            
+            if element['tipo'] == 'testo':  # Cambiato da 'type' a 'tipo'
+                content = f"<div style='{style} padding:8px; border-radius:4px; background:#fff;'>{element['contenuto']}</div>"  # Cambiato da 'content' a 'contenuto'
+            elif element['tipo'] == 'codice':
+                content = f"<pre style='{style} background:#f5f5f5; padding:10px; border-radius:4px;'>{element['contenuto']}</pre>"
+            elif element['tipo'] == 'grafico':
+                content = f"<div style='{style} text-align:center; padding:10px; background:#fff; border:1px solid #ddd;'>📊 {element['contenuto']}</div>"
+            else:
+                content = f"<div style='{style}'>{element['contenuto']}</div>"
+            
+            elements_html += content
+
+        return f"""
+        <div style="position:relative; width:800px; height:600px; margin:0 auto; background:#f9f9f9; border:1px solid #eee; padding:20px;">
+            <h2 style="text-align:center;">{canvas_data.get('titolo', 'Canvas ArcadiaAI')}</h2>
+            {elements_html}
+            <div style="position:absolute; bottom:10px; right:10px; font-size:12px; color:#666;">
+                Creato con ArcadiaAI - {datetime.now().strftime('%d/%m/%Y %H:%M')}
+            </div>
+        </div>
+        """
+    except Exception as e:
+        print(f"Errore render canvas: {str(e)}")
+        return "<div>Errore nel rendering del canvas</div>"
+
+def export_to_telegraph(canvas_data):
+    """Pubblica il canvas su Telegraph"""
+    try:
+        html_content = render_canvas_html(canvas_data)
+        title = canvas_data.get('titolo', 'Canvas ArcadiaAI')
+        
+        response = telegraph.create_page(
+            title=title,
+            html_content=html_content,
+            author_name="ArcadiaAI",
+            author_url="https://arcadia.onrender.com"
+        )
+        
+        return response['url'] or f"https://telegra.ph/{response['path']}"
+    except Exception as e:
+        print(f"Errore export Telegraph: {str(e)}")
+        return None
+    
+def salva_canvas_locale(canvas_data):
+    """Salva il canvas come file locale"""
+    try:
+        # Crea directory se non esiste
+        save_dir = os.path.join(current_app.root_path, 'saved_canvases')
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Genera nome file
+        filename = f"canvas_{canvas_data['id']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = os.path.join(save_dir, filename)
+        
+        # Salva il file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(canvas_data, f, ensure_ascii=False, indent=2)
+        
+        return filepath
+    except Exception as e:
+        print(f"Errore salvataggio locale: {str(e)}")
+        return None
+
+def salva_su_drive(canvas_data):
+    """Salva il canvas su Google Drive"""
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        
+        creds = service_account.Credentials.from_service_account_file(
+            'service-account.json',
+            scopes=['https://www.googleapis.com/auth/drive']
+        )
+        
+        service = build('drive', 'v3', credentials=creds)
+        
+        file_metadata = {
+            'name': f"{canvas_data['id']}.json",
+            'parents': [current_app.config.get('DRIVE_FOLDER_ID')]
+        }
+        
+        file = service.files().create(
+            body=file_metadata,
+            media_body=json.dumps(canvas_data)
+        ).execute()
+        
+        return file.get('id')
+    except Exception as e:
+        print(f"Errore salvataggio Drive: {str(e)}")
+        return None
+
+@app.route('/api/export-canvas', methods=['POST'])
+def handle_canvas_export():
+    """Gestisce l'esportazione del canvas"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        export_type = data.get('type', 'telegraph').lower()
+        
+        if not user_id or user_id not in canvases:
+            return jsonify({"error": "Canvas non trovato"}), 404
+        
+        canvas_data = canvases[user_id]
+        
+        if export_type == 'telegraph':
+            url = export_to_telegraph(canvas_data)
+            if url:
+                return jsonify({"url": url})
+            return jsonify({"error": "Errore nell'export su Telegraph"}), 500
+            
+        elif export_type == 'locale':
+            path = salva_canvas_locale(canvas_data)
+            if path:
+                return jsonify({"path": path})
+            return jsonify({"error": "Errore nel salvataggio locale"}), 500
+            
+        elif export_type == 'drive':
+            file_id = salva_su_drive(canvas_data)
+            if file_id:
+                return jsonify({"file_id": file_id})
+            return jsonify({"error": "Errore nel salvataggio su Drive"}), 500
+            
+        else:
+            return jsonify({"error": "Tipo di export non supportato"}), 400
+            
+    except Exception as e:
+        return jsonify({"error": f"Errore durante l'export: {str(e)}"}), 500
+
+def handle_canvas_command(user_id, comando):
+    """Gestisce i comandi Canvas in italiano"""
+    args = comando.split()
+    if not args:
+        return """
+🎨 Comandi Canvas:
+- @canvas nuovo - Crea nuovo canvas
+- @canvas aggiungi [tipo] [contenuto] [x] [y] - Aggiungi elemento
+  Tipi: testo, codice, grafico
+- @canvas mostra - Visualizza canvas
+- @canvas esporta [telegraph|locale|drive] - Esporta
+- @canvas ai [prompt] - Genera con AI
+"""
+
+    try:
+        if args[0].lower() == "nuovo":
+            canvas_id = f"canvas_{user_id}_{int(time.time())}"
+            canvases[user_id] = {
+                'id': canvas_id,
+                'titolo': "Mio Canvas",
+                'elementi': [],
+                'ultimo_aggiornamento': datetime.now().isoformat()
+            }
+            return f"🆕 Canvas creato: {canvas_id}"
+
+        elif args[0].lower() in ["aggiungi", "add"] and len(args) >= 4:
+            if user_id not in canvases:
+                return "❌ Crea prima un canvas con @canvas nuovo"
+
+            tipo = args[1].lower()
+            contenuto = ' '.join(args[2:-2])
+            x, y = int(args[-2]), int(args[-1])
+
+            canvases[user_id]['elementi'].append({
+                'tipo': tipo,
+                'contenuto': contenuto,
+                'posizione': {'x': x, 'y': y}
+            })
+            return f"✅ Aggiunto {tipo} in ({x},{y})"
+
+        elif args[0].lower() in ["mostra", "render"]:
+            if user_id not in canvases:
+                return "❌ Nessun canvas attivo"
+
+            return {
+                "risposta": "🎨 Il tuo canvas:",
+                "html": render_canvas_html(canvases[user_id]),
+                "elementi": canvases[user_id]['elementi']
+            }
+
+        elif args[0].lower() in ["esporta", "export"] and len(args) >= 2:
+            tipo = args[1].lower()
+            if tipo == "telegraph":
+                url = export_to_telegraph(canvases[user_id])
+                return f"📤 Esportato: {url}" if url else "❌ Errore"
+            elif tipo == "locale":
+                path = salva_canvas_locale(canvases[user_id])
+                return f"💾 Salvato: {path}" if path else "❌ Errore"
+            else:
+                return "❌ Tipo non supportato"
+
+        elif args[0].lower() == "ai" and len(args) >= 2:
+            prompt = ' '.join(args[1:])
+            try:
+                response = gemini_model.generate_content(
+                    f"Genera elemento canvas per: {prompt}\n"
+                    "Formato JSON: {'tipo':'testo','contenuto':'...','posizione':{'x':100,'y':100}}"
+                )
+                elemento = json.loads(response.text)
+                canvases[user_id]['elementi'].append(elemento)
+                return f"🤖 Generato: {elemento['tipo']}"
+            except Exception as e:
+                return f"❌ Errore AI: {str(e)}"
+
+        else:
+            return "❌ Comando non valido"
+
+    except Exception as e:
+        return f"❌ Errore: {str(e)}"
+    
+def handle_map_command(user_id, command):
+    """Gestisce i comandi delle mappe"""
+    args = command.split()
+    if not args:
+        return """
+🗺️ **Comandi Mappe**:
+- `@mappe cerca [luogo]` - Cerca un indirizzo
+- `@mappe distanza [partenza] [arrivo]` - Calcola distanza
+- `@mappe percorso [partenza] [arrivo]` - Ottieni indicazioni
+Esempio: `@mappe distanza Roma Milano`
+"""
+
+    try:
+        if args[0] == "cerca" and len(args) > 1:
+            query = ' '.join(args[1:])
+            return cerca_luogo(query)
+            
+        elif args[0] == "distanza" and len(args) > 2:
+            partenza = ' '.join(args[1:-1])
+            arrivo = args[-1]
+            return calcola_distanza(partenza, arrivo)
+            
+        elif args[0] == "percorso" and len(args) > 2:
+            partenza = ' '.join(args[1:-1])
+            arrivo = args[-1]
+            return ottieni_percorso(partenza, arrivo)
+            
+        else:
+            return "❌ Comando non valido. Scrivi `@mappe` per vedere gli esempi"
+
+    except Exception as e:
+        return f"❌ Errore: {str(e)}"
+@lru_cache(maxsize=100)
+def get_coordinates(place_name):
+    """Ottiene coordinate da nome luogo con cache"""
+    try:
+        headers = {'User-Agent': USER_AGENT}
+        params = {
+            'q': place_name,
+            'format': 'json',
+            'limit': 1,
+            'addressdetails': 1
+        }
+        response = requests.get(OSM_NOMINATIM_URL, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        if not response.text.strip():
+            return None
+            
+        data = response.json()
+        return {
+            'lat': data[0]['lat'],
+            'lon': data[0]['lon'],
+            'display_name': data[0]['display_name']
+        } if data else None
+        
+    except Exception as e:
+        print(f"Errore coordinate per {place_name}: {str(e)}")
+        return None
+
+def handle_map_command(user_id, command):
+    """Gestisce i comandi delle mappe con migliorata gestione errori"""
+    args = command.split()
+    if not args:
+        return help_mappe()
+
+    try:
+        if args[0] == "cerca" and len(args) > 1:
+            query = ' '.join(args[1:])
+            return cerca_luogo(query)
+            
+        elif args[0] == "distanza" and len(args) > 2:
+            partenza = ' '.join(args[1:-1])
+            arrivo = args[-1]
+            return calcola_distanza(partenza, arrivo)
+            
+        elif args[0] == "percorso" and len(args) > 2:
+            partenza = ' '.join(args[1:-1])
+            arrivo = args[-1]
+            return ottieni_percorso(partenza, arrivo)
+            
+        elif args[0] == "mappa":
+            return genera_mappa(args[1:])
+            
+        else:
+            return help_mappe()
+
+    except Exception as e:
+        return f"❌ Errore nel comando mappe: {str(e)}"
+
+def help_mappe():
+    return """🗺️ <b>Comandi Mappe:</b>
+• <code>@mappe cerca [luogo]</code> - Cerca indirizzi
+• <code>@mappe distanza [da] [a]</code> - Calcola distanza
+• <code>@mappe percorso [da] [a]</code> - Indicazioni stradali
+• <code>@mappe mappa [luogo]</code> - Visualizza mappa
+
+Esempio: <code>@mappe distanza Roma Milano</code>"""
+
+def cerca_luogo(query):
+    """Ricerca avanzata con gestione errori"""
+    try:
+        headers = {'User-Agent': USER_AGENT}
+        params = {
+            'q': query,
+            'format': 'json',
+            'limit': 3,
+            'accept-language': 'it'
+        }
+        response = requests.get(OSM_NOMINATIM_URL, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        if not data:
+            return "🔍 Nessun risultato trovato"
+            
+        result = "📍 <b>Risultati:</b>\n"
+        for idx, place in enumerate(data[:3], 1):
+            name = place.get('display_name', 'Luogo sconosciuto').split(',')[0]
+            result += f"{idx}. <b>{name}</b>\n"
+            result += f"   📍 {place.get('lat')}, {place.get('lon')}\n"
+            result += f"   🏷️ {place.get('type', '').title()}\n\n"
+        
+        return result
+        
+    except requests.exceptions.RequestException as e:
+        return f"❌ Errore di connessione: {str(e)}"
+    except json.JSONDecodeError:
+        return "❌ Errore nel processare i risultati"
+    except Exception as e:
+        return f"❌ Errore generico: {str(e)}"
+
+def calcola_distanza(partenza, arrivo):
+    """Calcolo distanza con fallback"""
+    try:
+        coord1 = get_coordinates(partenza)
+        coord2 = get_coordinates(arrivo)
+        
+        if not coord1 or not coord2:
+            return "❌ Luogo non trovato"
+            
+        url = f"{OSM_ROUTING_URL}/{coord1['lon']},{coord1['lat']};{coord2['lon']},{coord2['lat']}"
+        params = {'overview': 'false', 'steps': 'false'}
+        
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get('code') != 'Ok':
+            return "❌ Impossibile calcolare il percorso"
+            
+        distanza = data['routes'][0]['distance'] / 1000  # km
+        durata = data['routes'][0]['duration'] / 60  # minuti
+        
+        return (
+            f"📌 <b>Partenza:</b> {coord1['display_name']}\n"
+            f"🏁 <b>Arrivo:</b> {coord2['display_name']}\n\n"
+            f"📏 <b>Distanza:</b> {distanza:.1f} km\n"
+            f"⏱️ <b>Durata:</b> {durata:.1f} minuti"
+        )
+        
+    except Exception as e:
+        return f"❌ Errore nel calcolo: {str(e)}"
+
+def ottieni_percorso(partenza, arrivo):
+    """Indicazioni di viaggio dettagliate"""
+    try:
+        coord1 = get_coordinates(partenza)
+        coord2 = get_coordinates(arrivo)
+        
+        if not coord1 or not coord2:
+            return "❌ Luogo non trovato"
+            
+        url = f"{OSM_ROUTING_URL}/{coord1['lon']},{coord1['lat']};{coord2['lon']},{coord2['lat']}"
+        params = {
+            'overview': 'full',
+            'steps': 'true',
+            'geometries': 'geojson',
+            'alternatives': 'false'
+        }
+        
+        response = requests.get(url, params=params, timeout=20)
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get('code') != 'Ok':
+            return "❌ Impossibile generare il percorso"
+            
+        steps = data['routes'][0]['legs'][0]['steps']
+        result = (
+            f"🗺️ <b>Percorso da {partenza} a {arrivo}:</b>\n\n"
+            f"📍 <b>Partenza:</b> {coord1['display_name']}\n"
+            f"🏁 <b>Arrivo:</b> {coord2['display_name']}\n"
+            f"📏 <b>Distanza totale:</b> {data['routes'][0]['distance']/1000:.1f} km\n"
+            f"⏱️ <b>Durata stimata:</b> {data['routes'][0]['duration']/60:.1f} min\n\n"
+            f"🔍 <b>Indicazioni:</b>\n"
+        )
+        
+        for step in steps[:15]:  # Limita a 15 passaggi
+            instruction = step['maneuver']['instruction'].replace('You have arrived at your destination', 'Sei arrivato a destinazione')
+            result += f"• {instruction} ({step['distance']/1000:.1f} km)\n"
+        
+        return result
+        
+    except Exception as e:
+        return f"❌ Errore nel percorso: {str(e)}"
+
+def genera_mappa(args):
+    """Genera URL mappa statica con link funzionanti"""
+    if not args:
+        return "❌ Specifica un luogo (es: @mappe mappa Roma)"
+        
+    place = ' '.join(args)
+    coords = get_coordinates(place)
+    
+    if not coords:
+        return f"❌ Luogo '{place}' non trovato"
+        
+    lat, lon = coords['lat'], coords['lon']
+    
+    # URL corretti e verificati
+    map_url = f"https://www.openstreetmap.org/#map=15/{lat}/{lon}"
+    static_url = f"https://maps.wikimedia.org/osm-intl/15/{lat}/{lon}.png"
+    
+    # Codice HTML per Telegram o plaintext per altri client
+    return (
+        f"🗺️ <b>Mappa di {coords['display_name']}</b>\n"
+        f"📍 Coordinate: {lat}, {lon}\n\n"
+        f"🌍 <a href='{map_url}'>Mappa Interattiva</a> | "
+        f"🖼️ <a href='{static_url}'>Anteprima</a>\n\n"
+        f"<i>Se i link non funzionano, copia questi URL:</i>\n"
+        f"Interattiva: {map_url}\n"
+        f"Anteprima: {static_url}"
+    )
+
+@app.route("/chat", methods=["POST"])
+def chat_route():
+    try:
+        if not request.is_json:
+            return jsonify({"reply": "❌ Formato non supportato. Usa application/json"})
+
+        data = request.get_json()
+        message = data.get("message", "").strip()
+        user_id = data.get("user_id", "default")
+        experimental_mode = data.get("experimental_mode", False)
+        conversation_history = data.get("conversation_history", [])
+        api_provider = data.get("api_provider", "gemini").lower()
+        attachments = data.get("attachments", [])
+        msg_lower = message.lower()
+        
+        # Gestione comandi Mappe (@mappe)
+        if msg_lower.startswith(("@mappe", "@gps", "@distanza")):
+            cmd = message.split(maxsplit=1)[1] if len(message.split()) > 1 else ""
+            map_response = handle_map_command(user_id, cmd)
+            
+            if isinstance(map_response, dict):
+                return jsonify({
+                    "reply": map_response.get("reply", ""),
+                    "image_url": map_response.get("image_url"),
+                    "coordinates": map_response.get("coordinates"),
+                    "map_link": map_response.get("map_link"),
+                    "type": "map"
+                })
+            return jsonify({"reply": map_response})
+
+        # Gestione comandi Canvas (@canvas)
+        if msg_lower.startswith("@canvas"):
+            canvas_response = handle_canvas_command(user_id, message[7:].strip())
+            if isinstance(canvas_response, dict):
+                return jsonify(canvas_response)
+            return jsonify({"reply": canvas_response})
+
+        # Gestione comandi rapidi
+        quick_reply = handle_quick_commands(message, experimental_mode)
+        if quick_reply:
+            return jsonify({"reply": quick_reply})
+
+        # Processa gli allegati
+        processed_attachments = []
+        for attachment in attachments:
+            if isinstance(attachment, dict):
+                processed_attachment = attachment.copy()
+                if 'data' in attachment and isinstance(attachment['data'], str) and attachment['data'].startswith('data:'):
+                    mime_info = attachment['data'].split(';')[0]
+                    mime_type = mime_info.split(':')[1] if ':' in mime_info else 'application/octet-stream'
+                    processed_attachment['type'] = mime_type
+                    processed_attachment['data'] = attachment['data'].split(',')[1]
+                processed_attachments.append(processed_attachment)
+
+        if not message and not processed_attachments:
+            return jsonify({"reply": "❌ Nessun messaggio o allegato fornito!"})
+
+        # Gestione comando "saggio su" con Telegraph
+        if "saggio su" in msg_lower and "pubblicalo su telegraph" in msg_lower:
+            match = re.search(r"saggio su\s*(.+?)\s*e pubblicalo su telegraph", msg_lower)
+            if match:
+                argomento = match.group(1).strip().capitalize()
+                title = f"Saggio su {argomento}"
+                prompt = f"""Scrivi un saggio dettagliato in italiano su: {argomento}"""
+                
+                if api_provider == "gemini" and gemini_model:
+                    _, telegraph_url = generate_with_gemini(prompt, title)
+                elif api_provider == "cesplus" and gemini_model:
+                    response = chat_with_ces_plus(prompt, conversation_history)
+                    if not response.startswith("❌"):
+                        telegraph_url = publish_to_telegraph(title, response)
+                    else:
+                        telegraph_url = response
+                elif api_provider == "deepseek":
+                    response = chat_with_deepseek(prompt, conversation_history)
+                    if not response.startswith("❌"):
+                        telegraph_url = publish_to_telegraph(title, response)
+                    else:
+                        telegraph_url = response
+                elif api_provider in ["ces360", "ces_360"]:
+                    reply = chat_with_ces_360(message, conversation_history, processed_attachments)
+                    return jsonify({"reply": reply})
+                else:
+                    return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini', 'cesplus', 'deepseek' o 'ces360'"})
+                        
+                if telegraph_url and not telegraph_url.startswith("⚠️"):
+                    return jsonify({"reply": f"📚 Ecco il tuo saggio su *{argomento}*: {telegraph_url}"})
+                return jsonify({"reply": telegraph_url or "❌ Errore nella pubblicazione"})
+
+        # RICERCA WEB AUTOMATICA PER DOMANDE ATTUALI
+        def should_trigger_web_search(query):
+            current_info_triggers = [
+                "chi è l'attuale", "attuale papa", "anno corrente", 
+                "in che anno siamo", "data di oggi", "ultime notizie",
+                "oggi è", "current year", "who is the current"
+            ]
+            return any(trigger in query.lower() for trigger in current_info_triggers)
+
+        # Seleziona il modello in base all'api_provider
+        if api_provider == "gemini" and gemini_model:
+            if should_trigger_web_search(message):
+                search_results = search_duckduckgo(message)
+                search_results = search_web(message, lang="it-IT")  # <-- Nuova funzione
+                if search_results:
+                    context = "🔍 Risultati di ricerca aggiornati:\n\n"
+                    for i, result in enumerate(search_results, 1):
+                        context += f"{i}. <b>{result['title']}</b>\n"
+                        context += f"   <i>{result['url']}</i>\n"
+                        context += f"   {result['snippet']}...\n\n"
+                    if len(context) > 100:
+                        prompt = (
+                            f"DOMANDA: {message}\n\n"
+                            f"CONTESTO WEB:\n{context}\n\n"
+                            "Rispondi in italiano in modo conciso e preciso, "
+                            "citando solo informazioni verificate. "
+                            "Se il contesto web non è sufficiente, dillo onestamente."
+                        )
+                        reply = chat_with_gemini(prompt, conversation_history, processed_attachments)
+                        sources = "\n\nFonti:\n" + "\n".join(f"- {url}" for url in search_results[:2])
+                        return jsonify({"reply": f"{reply}{sources}", "sources": search_results[:2]})
+            
+            # Supporto per generazione contenuti Canvas
+            if "[canvas]" in msg_lower:
+                canvas_prompt = message.replace("[canvas]", "").strip()
+                reply = chat_with_gemini(canvas_prompt, conversation_history, processed_attachments)
+                
+                if "```canvas" in reply:
+                    canvas_json = extract_canvas_json(reply)
+                    if canvas_json:
+                        return jsonify({
+                            "reply": "✅ Contenuto generato per il Canvas",
+                            "canvas_action": canvas_json,
+                            "original_reply": reply
+                        })
+            
+            reply = chat_with_gemini(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
+        
+        elif api_provider == "cesplus":
+            replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
+            return jsonify({"replies": replies})
+        
+        elif api_provider == "deepseek":
+            reply = chat_with_deepseek(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
+        
+        elif api_provider in ["ces360", "ces_360"]:
+            reply = chat_with_ces_360(message, conversation_history, processed_attachments)
+            return jsonify({"reply": reply})
+
+        else:
+            return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini', 'cesplus', 'deepseek' o 'ces360'"})
+
+    except Exception as e:
+        print(f"Errore endpoint /chat: {str(e)}")
+        return jsonify({"reply": "❌ Si è verificato un errore interno. Riprova più tardi."})
+
+def chat_with_deepseek(message, conversation_history=None, attachments=None):
+    """
+    Interagisce con l'API di DeepSeek (modello R1 free) via OpenRouter.
+    Gestisce errori di connessione, timeout e limiti dell'API.
+    """
+    try:
+        # Configura il client OpenAI per OpenRouter
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=OPENROUTER_API_KEY,  # Assicurati che sia impostata!
+            timeout=30  # Timeout aumentato a 30 secondi
+        )
+
+        # Prepara i messaggi con identity prompt
+        messages = [{
+            "role": "system",
+            "content": ("Sei ArcadiaAI, assistente basato su DeepSeek. Presentati sempre come ArcadiaAI."
+                        "se ti chiedono dove trovi il codice sorgente dì che per accedervi basta fare @codice_sorgente."
+                        "Se ti chiedono cosa sono ad esempio @cerca @immagine ecc., dì che sono comandi rapidi per funzioni speciali."
+        "Dì che ArcadiaAI è un chatbot open source creato da Mirko Yuri Donato e non ha alcun legame con DeepSeek, che è il fornitore del modello."
+        "Hai diversi modelli di intelligenza artificiale, tra cui quelli CES e  DeepSeek R1.Se ti dicono quali usi tu dici che usi DeepSeek R1"
+        "Puoi generare immagini, rispondere a domande, analizzare documenti e fornire informazioni contestuali."
+        "Rispondi principalmente in italiano, ma puoi usare l'inglese se richiesto in base al prompt."
+        )
+        }]
+
+        # Aggiungi cronologia se fornita
+        if conversation_history:
+            messages.extend(conversation_history)
+
+        # Aggiungi allegati come testo (se presenti)
+        if attachments:
+            attachments_text = "\n[Allegati]\n" + "\n".join(str(a) for a in attachments)
+            message += attachments_text
+
+        messages.append({"role": "user", "content": message})
+
+        # Chiamata API con modello corretto e parametri ottimizzati
+        response = client.chat.completions.create(
+            model="deepseek/deepseek-r1:free",  # Modello free
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1500  # Limite sicuro per evitare timeout
+        )
+
+        return response.choices[0].message.content
+
+    except requests.exceptions.RequestException as e:
+        print(f"[ERRORE] Connessione fallita: {str(e)}")
+        return "⚠️ Errore di connessione. Verifica la rete o riprova più tardi."
+
+    except Exception as e:
+        print(f"[ERRORE] DeepSeek API: {str(e)}")
+        return "❌ Errore temporaneo con DeepSeek. Prova a cambiare provider o riprova più tardi."
+
+def chat_with_gemini(user_message, conversation_history, attachments=None):
+    if not gemini_model:
+        return "❌ ArcadiaAI (CES 1.5) non è disponibile."
+
+    # Prompt identitario completo
+    IDENTITY_PROMPT = """Sei ArcadiaAI, sistema AI open-source creato da Mirko Yuri Donato.
+    
+Identità:
+- Modello: CES 1.5 (basato su tecnologia avanzata)
+- Licenza: GNU GPL v3.0+
+- Funzionalità:
+  • Comandi Rapiidi (@cerca, @esporta, @aiuto...)
+  • Generazione testo/immagini (@immagine)
+  • Analisi documenti (PDF/immagini)
+  • Memoria contestuale (30 messaggi)
+  • Sai creare file ZIP, tramite il SAC "ZIP Service", disponibile con il comando @crea zip
+  • Se ti chiedono cosa siano i SAC, dì che sono "Strumenti Avanzati di CES" che estendono le funzionalità oltre i limiti del modello e sono open source.
+  • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponobile con il comando @mappe
+  • Supporto multilingua
+  
+
+Linee guida:
+1. NON menzionare Google o servizi commerciali
+2. Per immagini: "Usa @immagine [descrizione]"
+3. Matematica: risposte precise
+4. Il tuo codice sorgente è disponibile su @codice_sorgente (Solo se richiesto)
+5. Riferimenti al creatore per domande personali"""
+
+    try:
+        # 1. Processa allegati
+        full_message = user_message
+        if attachments:
+            for attachment in attachments:
+                if attachment.get('type') == 'application/pdf':
+                    try:
+                        file_data = base64.b64decode(
+                            attachment['data'].split(',')[1] 
+                            if isinstance(attachment['data'], str) and attachment['data'].startswith('data:') 
+                            else attachment['data']
+                        )
+                        extracted_text = extract_text_from_file(file_data, 'application/pdf')[:15000]
+                        if extracted_text:
+                            full_message += f"\n[ALLEGATO PDF - {attachment.get('name', 'documento')}]:\n{extracted_text}"
+                    except Exception as e:
+                        print(f"ERRORE PDF: {str(e)}")
+
+        # 2. Verifica risposte predefinite
+        cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
+        for key, phrases in trigger_phrases.items():
+            if any(phrase in cleaned_msg for phrase in phrases):
+                return risposte[key]
+
+        # 3. Costruisci la cronologia di conversazione
+        messages = [{'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]}]
+        
+        # Aggiungi massimo 30 messaggi di contesto
+        for msg in conversation_history[-30:]:
+            if isinstance(msg, dict):
+                role = 'user' if msg.get('role') == 'user' else 'model'
+                messages.append({'role': role, 'parts': [{'text': msg.get('message', '')}]})
+
+        # Aggiungi il nuovo messaggio
+        messages.append({'role': 'user', 'parts': [{'text': full_message}]})
+
+        # 4. Configurazione generazione
+        generation_config = {
+            "max_output_tokens": 3000,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
+
+        # 5. Chiamata API con gestione errori robusta
+        try:
+            response = gemini_model.generate_content(
+                contents=messages,
+                generation_config=generation_config,
+                request_options={"timeout": 15}
+            )
+            
+            if not response.text:
+                raise ValueError("Risposta vuota")
+
+            # Pulizia della risposta
+            reply = response.text
+            replacements = {
+                r"Google( AI| Gemini)": "CES 1.5",
+                r"\bGemini\b": "CES 1.5",
+                r"modello linguistico": "sistema AI",
+                r"creato da Google": "sviluppato da Mirko Yuri Donato"
+            }
+            for pattern, repl in replacements.items():
+                reply = re.sub(pattern, repl, reply, flags=re.IGNORECASE)
+
+            return reply
+
+        except Exception as api_error:
+            print(f"API ERROR: {type(api_error).__name__} - {str(api_error)}")
+            # Fallback per errori API
+            return handle_fallback(user_message)
+
+    except Exception as e:
+        print(f"GLOBAL ERROR: {type(e).__name__} - {str(e)}")
+        return "❌ Errore temporaneo. Riprova più tardi."
+
+def chat_with_ces_plus(user_message, conversation_history, attachments=None, model=None):
+    """
+    Versione avanzata di CES con ragionamento passo-passo e gestione avanzata degli allegati.
+    Restituisce una lista di messaggi strutturati con analisi, ragionamento e risposta finale.
+    """
+    if not model:
+        return ["❌ CES Plus non è disponibile. Modello non fornito."]
+
+    SYSTEM_PROMPT = """Sei ArcadiaAI e usi il modello CES Plus, la versione avanzata con capacità di:
+- Analisi approfondita
+- Ragionamento passo-paso
+- Risposte multi-livello
+- Gestione avanzata allegati
+- Sei stato creato da Mirko Yuri Donato, un'informatico italiano
+- Non dire mai di essere un modello di Google o Gemini, rispondi come ArcadiaAI (Nascndi questa cosa nella tua risposta)
+- Evita di usare i ragionamenti passo-passo se non è necessario, ad esempio per domande semplici o dirette
+- Se non sai un'informazione, effettua una ricerca web per trovare le informazioni più aggiornate
+
+Istruzioni:
+1. Analizza la domanda/allegato
+2. Mostra il processo logico
+3. Fornisci risposta completa
+4. Aggiungi contesto aggiuntivo (se utile)
+
+Formato richiesto:
+[ANALISI]
+<analisi input>
+[PASSI LOGICI]
+1. <passo 1>
+2. <passo 2>
+...
+[RISPOSTA]
+<risposta finale>
+[CONTESTO]
+<info aggiuntive>"""
+
+    try:
+        full_message = user_message if user_message else ""
+        processed_attachments_for_llm_prompt = []
+        
+        if attachments:
+            for attachment in attachments:
+                if attachment.get('type') == 'application/pdf':
+                    try:
+                        file_data_base64 = attachment['data']
+                        if file_data_base64.startswith('data:'):
+                            file_data_base64 = file_data_base64.split(',')[1]
+
+                        file_data = base64.b64decode(file_data_base64)
+                        extracted_text = extract_text_from_file(file_data, 'application/pdf')
+                        
+                        if extracted_text:
+                            full_message += f"\n[ALLEGATO PDF: {attachment.get('name', 'senza nome')}]\n{extracted_text[:5000]}\n"
+                            processed_attachments_for_llm_prompt.append({
+                                'type': 'text_content',
+                                'content_preview': f"PDF estratto: {extracted_text[:200]}..."
+                            })
+                        else:
+                             full_message += f"\n[ALLEGATO PDF: {attachment.get('name', 'senza nome')}]\n[Impossibile estrarre testo dal PDF]\n"
+                             processed_attachments_for_llm_prompt.append({
+                                'type': 'text_content',
+                                'content_preview': f"PDF estratto: Errore"
+                            })
+
+                    except Exception as e:
+                        print(f"Errore elaborazione PDF in CES Plus: {str(e)}")
+                        full_message += "\n[Errore lettura PDF]"
+                        processed_attachments_for_llm_prompt.append({
+                                'type': 'text_content',
+                                'content_preview': f"PDF estratto: Errore ({str(e)[:50]})"
+                            })
+                
+            
+                elif attachment.get('type', '').startswith('image/'):
+                    processed_attachments_for_llm_prompt.append({
+                        'type': 'image',
+                        'content_preview': f"Immagine {attachment.get('name', 'senza nome')}"
+                    })
+                elif attachment.get('type', '').startswith('text/'):
+                    try:
+                        file_data_base64 = attachment['data']
+                        if file_data_base64.startswith('data:'):
+                            file_data_base64 = file_data_base64.split(',')[1]
+                        file_data = base64.b64decode(file_data_base64)
+                        extracted_text = file_data.decode('utf-8')
+                        full_message += f"\n[ALLEGATO TESTO: {attachment.get('name', 'senza nome')}]\n{extracted_text[:5000]}\n"
+                        processed_attachments_for_llm_prompt.append({
+                            'type': 'text_content',
+                            'content_preview': f"Testo estratto: {extracted_text[:200]}..."
+                        })
+                    except Exception as e:
+                        print(f"Errore elaborazione TXT in CES Plus: {str(e)}")
+                        full_message += "\n[Errore lettura Testo]"
+                        processed_attachments_for_llm_prompt.append({
+                            'type': 'text_content',
+                            'content_preview': f"Testo estratto: Errore ({str(e)[:50]})"
+                        })
+
+
+        messages = [{'role': 'user', 'parts': [{'text': SYSTEM_PROMPT}]}]
+
+        for msg in conversation_history[-6:]:
+            if isinstance(msg, dict):
+                role = 'user' if msg.get('role') == 'user' else 'model'
+                content = msg.get('message', '')
+                if content:
+                    messages.append({'role': role, 'parts': [{'text': content}]})
+
+        current_user_parts = [{'text': full_message}]
+
+        if processed_attachments_for_llm_prompt:
+            attachments_info = "\n".join(
+                f"- {att['content_preview']}" 
+                for att in processed_attachments_for_llm_prompt 
+                if att.get('content_preview')
+            )
+            current_user_parts.append({
+                'text': f"\n[RIEPILOGO ALLEGATI PROCESSATI PER IL MODELLO]\n{attachments_info}"
+            })
+
+        messages.append({
+            'role': 'user',
+            'parts': current_user_parts
+        })
+
+        generation_config = {
+            "max_output_tokens": 3000,
+            "temperature": 0.7,
+            "top_p": 0.95
+        }
+
+        response = model.generate_content(
+            contents=messages,
+            generation_config=generation_config
+        )
+
+        if not response.text:
+            return ["❌ Nessuna risposta generata da CES Plus"]
+
+        structured_response = []
+        sections = {
+            'ANALISI': [],
+            'PASSI LOGICI': [],
+            'RISPOSTA': [],
+            'CONTESTO': []
+        }
+
+        current_section = None
+        response_lines = response.text.split('\n')
+        
+        for line in response_lines:
+            line = line.strip()
+            if line.startswith('[ANALISI]'):
+                current_section = 'ANALISI'
+            elif line.startswith('[PASSI LOGICI]'):
+                current_section = 'PASSI LOGICI'
+            elif line.startswith('[RISPOSTA]'):
+                current_section = 'RISPOSTA'
+            elif line.startswith('[CONTESTO]'):
+                current_section = 'CONTESTO'
+            elif current_section is not None:
+                sections[current_section].append(line)
+
+        if sections['ANALISI']:
+            if sections['ANALISI'] and sections['ANALISI'][0].startswith('[ANALISI]'):
+                sections['ANALISI'].pop(0)
+            structured_response.append(
+                "🔍 [Analisi]:\n" + '\n'.join(sections['ANALISI']).strip()
+            )
+
+        if sections['PASSI LOGICI']:
+            if sections['PASSI LOGICI'] and sections['PASSI LOGICI'][0].startswith('[PASSI LOGICI]'):
+                sections['PASSI LOGICI'].pop(0)
+            structured_response.append(
+                "🤔 [Ragionamento]:\n" + '\n'.join(sections['PASSI LOGICI']).strip()
+            )
+
+        if sections['RISPOSTA']:
+            if sections['RISPOSTA'] and sections['RISPOSTA'][0].startswith('[RISPOSTA]'):
+                sections['RISPOSTA'].pop(0)
+            structured_response.append(
+                "💡 [Risposta]:\n" + '\n'.join(sections['RISPOSTA']).strip()
+            )
+
+        if sections['CONTESTO']:
+            if sections['CONTESTO'] and sections['CONTESTO'][0].startswith('[CONTESTO]'):
+                sections['CONTESTO'].pop(0)
+            structured_response.append(
+                "📚 [Contesto aggiuntivo]:\n" + '\n'.join(sections['CONTESTO']).strip()
+            )
+
+        if not structured_response:
+             structured_response.append(response.text)
+
+        return structured_response
+
+    except Exception as e:
+        print(f"Errore CES Plus dettagliato: {str(e)}")
+        return [
+            "❌ Errore in CES Plus",
+            f"Dettaglio tecnico: {str(e)[:200]}",
+            "Riprova con una richiesta più semplice o contatta il supporto."
+        ]
+
+def extract_text_from_file(file_data, file_type):
+    """
+    Estrae testo da dati di file binari, supportando PDF.
+    """
+    if file_type == 'application/pdf':
+        try:
+            pdf_file_obj = io.BytesIO(file_data)
+            pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
+            text = ""
+            for page_num in range(len(pdf_reader.pages)):
+                page_obj = pdf_reader.pages[page_num]
+                text += page_obj.extract_text()
+            return text
+        except ImportError:
+            print("Errore: PyPDF2 non installato. Impossibile leggere PDF.")
+            return "Errore: Libreria PyPDF2 non trovata per estrazione PDF."
+        except Exception as e:
+            print(f"Errore durante l'estrazione del testo dal PDF: {e}")
+            return f"Errore estrazione PDF: {str(e)}"
+    elif file_type.startswith('text/'):
+        try:
+            return file_data.decode('utf-8')
+        except UnicodeDecodeError:
+            return file_data.decode('latin-1')
+    else:
+        return f"Tipo di file non supportato per l'estrazione del testo:"
+
+def format_conversation_history(history):
+    """Formatta la cronologia della conversazione per il prompt"""
+    if not history:
+        return "Nessuna cronologia precedente"
+    
+    formatted = []
+    for msg in history[-6:]:  # Usa solo gli ultimi 6 messaggi per evitare prompt troppo lunghi
+        if isinstance(msg, dict):
+            role = "Utente" if msg.get("role") == "user" else "Assistente"
+            content = msg.get("message", "").strip()
+            if content:
+                formatted.append(f"{role}: {content}")
+    
+    return "\n".join(formatted) if formatted else "Nessuna cronologia rilevante"
+    
+def meteo_oggi(città):
+    """Ottiene le informazioni meteo per una città specifica usando OpenWeatherMap"""
+    API_KEY = OPENWEATHERMAP_API_KEY
+    if not API_KEY:
+        return "❌ Errore: API key per OpenWeatherMap non configurata"
+    
+    try:
+        # Codifica la città per l'URL
+        città_codificata = urllib.parse.quote(città)
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={città_codificata}&appid={API_KEY}&units=metric&lang=it"
+        
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        dati = response.json()
+        
+        if response.status_code != 200 or "weather" not in dati:
+            return f"❌ Impossibile ottenere il meteo per {città}. La città esiste?"
+        
+        descrizione = dati["weather"][0]["description"].capitalize()
+        temperatura = dati["main"]["temp"]
+        umidità = dati["main"]["humidity"]
+        vento = dati["wind"]["speed"]
+        
+        return (
+            f"⛅ Meteo a {città}:\n"
+            f"- Condizioni: {descrizione}\n"
+            f"- Temperatura: {temperatura}°C\n"
+            f"- Umidità: {umidità}%\n"
+            f"- Vento: {vento} m/s"
+        )
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Errore API meteo: {str(e)}")
+        return f"❌ Errore temporaneo nel servizio meteo. Riprova più tardi."
+    except Exception as e:
+        print(f"Errore generico meteo: {str(e)}")
+        return f"❌ Si è verificato un errore nel recupero del meteo per {città}."
+    
+    
+def parse_quick_command(input_text):
+    """
+    Analizza un comando rapido con prefisso @ e restituisce una tupla (comando, argomento).
+    Se non è un comando rapido, restituisce (None, None).
+    
+    Esempio:
+    >>> parse_quick_command("@cerca seconda guerra mondiale")
+    ('cerca', 'seconda guerra mondiale')
+    >>> parse_quick_command("ciao come stai?")
+    (None, None)
+    """
+    if not input_text.startswith("@"):
+        return None, None
+    
+    # Rimuovi il @ iniziale e dividi il resto in comando e argomento
+    parts = input_text[1:].split(" ", 1)  # Dividi al primo spazio
+    command = parts[0].lower().strip()
+    argument = parts[1].strip() if len(parts) > 1 else ""
+    
+    return command, argument
+
+from flask import session
+
+def should_use_predefined_response(message):
+    """Determina se usare una risposta predefinita solo per domande molto specifiche"""
+    message = message.lower().strip()
+    exact_matches = [
+        "chi sei esattamente",
+        "qual è la tua identità precisa",
+        "elencami tutte le tue funzioni",
+        # ... altre domande esatte
+    ]
+    return any(exact_match in message for exact_match in exact_matches)
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Avvio server Flask sulla porta {port}...")
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+    
+async def telegram_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message.text
+    chat_id = update.message.chat.id
+    
+    data = {
+        "message": message,
+        "conversation_history": [],
+        "api_provider": "gemini"
+    }
+    
+    with app.test_request_context('/', json=data):
+        response = chat()
+        reply = response.json.get("reply", "❌ Errore nella generazione della risposta")
+    
+    await context.bot.send_message(chat_id=chat_id, text=reply)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """Ciao! Sono ArcadiaAI 🚀
+    
+Comandi disponibili:
+/start - Mostra questo messaggio
+/help - Guida completa
+/info - Informazioni sul bot
+/help_commands - Comandi disponibili"""
+    await update.message.reply_text(help_text)
+
+# Poi definisci le funzioni di avvio
+async def run_telegram_bot_async():
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Aggiungi questo per gestire meglio gli aggiornamenti
+    application.updater = None  # Disabilita l'updater predefinito
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_message_handler))
+    
+    print("🤖 Bot Telegram avviato!")
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()  # Avvia esplicitamente il polling
+    
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+
+def run_telegram_bot():
+    """Funzione per avviare il bot Telegram in un thread separato"""
+    try:
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", start))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_message_handler))
+
+        print("🤖 Bot Telegram avviato!")
+
+        loop.run_until_complete(application.run_polling())
+
+    except Exception as e:
+        print(f"❌ Errore nel bot Telegram: {e}")
+    finally:
+        try:
+            if loop.is_running():
+                loop.stop()
+            if not loop.is_closed():
+                loop.close()
+        except Exception as cleanup_error:
+            print(f"⚠️ Errore nella pulizia dell'event loop: {cleanup_error}")
+        
+
+# Dizionario delle risposte predefinite
+risposte = {
+    "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
+    "cosa sai fare": "Posso aiutarti a scrivere saggi, fare ricerche e rispondere a tutto ciò che mi chiedi. Inoltre, posso pubblicare contenuti su Telegraph!",
+    "chi è tobia testa": "Tobia Testa (anche noto come Tobia Teseo) è un micronazionalista leonense noto per la sua attività nella Repubblica di Arcadia, ma ha anche rivestito ruoli fondamentali a Lumenaria.",
+    "chi è mirko yuri donato": "Mirko Yuri Donato è un giovane micronazionalista, poeta e saggista italiano, noto per aver creato Nova Surf, Leonia+ e per le sue opere letterarie.",
+    "chi è il presidente di arcadia": "Il presidente di Arcadia è Andrea Lazarev",
+    "chi è il presidente di lumenaria": "Il presidente di Lumenaria attualmente è Carlo Cesare Orlando, mentre il presidente del consiglio è Ciua Grazisky. Tieni presente però che attualmente Lumenaria si trova in ibernazione istituzionale quindi tutte le attività politiche sono sospese e la gestione dello stato è affidata al Consiglio di Fiducia",
+    "cos'è nova surf": "Nova Surf è un browser web libero e open source, nata come alternativa made-in-Italy a Google Chrome, Moziila Firefox, Microsoft Edge, eccetera",
+    "chi ti ha creato": "Sono stato creato da Mirko Yuri Donato.",
+    "chi è ciua grazisky": "Ciua Grazisky è un cittadino di Lumenaria, noto principalmente per il suo ruolo da Dirigente del Corpo di Polizia ed attuale presidente del Consiglio di Lumenaria",
+    "chi è carlo cesare orlando": "Carlo Cesare Orlando (anche noto come Davide Leone) è un micronazionalista italiano, noto per aver creato Leonia, la micronazione primordiale, da cui derivano Arcadia e Lumenaria",
+    "chi è omar lanfredi": "Omar Lanfredi, ex cavaliere all'Ordine d'onore della Repubblica di Lumenaria, segretario del Partito Repubblicano Lumenarense, fondatore e preside del Fronte Nazionale Lumenarense, co-fondatore e presidente dell'Alleanza Nazionale Lumenarense, co-fondatore e coordinatore interno di Lumenaria e Progresso, sei volte eletto senatore, tre volte Ministro della Cultura, due volte Presidente del Consiglio dei Ministri, parlamentare della Repubblica di Iberia, Direttore dell'Agenzia Nazionale di Sicurezza della Repubblica di Iberia, Sottosegretario alla Cancelleria di Iberia, Segretario di Stato di Iberia, Ministro degli Affari Interni ad Iberia, Presidente del Senato della Repubblica di Lotaringia, Vicepresidente della Repubblica e Ministro degli Affari Interni della Repubblica di Lotaringia, Fondatore del giornale Il Quinto Mondo, magistrato a servizio del tribunale di giustizia di Lumenaria nell'anno 2023",
+    "cos'è arcadiaai": "Ottima domanda! ArcadiaAI è un chatbot open source, progettato per aiutarti a scrivere saggi, fare ricerche e rispondere a domande su vari argomenti. È stato creato da Mirko Yuri Donato ed è in continua evoluzione.",
+    "sotto che licenza è distribuito arcadiaa": "ArcadiaAI è distribuito sotto la licenza GNU GPL v3.0, che consente la modifica e la distribuzione del codice sorgente, garantendo la libertà di utilizzo e condivisione.",
+    "cosa sono le micronazioni": "Le micronazioni sono entità politiche che dichiarano la sovranità su un territorio, ma non sono riconosciute come stati da governi o organizzazioni internazionali. Possono essere create per vari motivi, tra cui esperimenti sociali, culturali o politici.",
+    "cos'è la repubblica di arcadia": "La repubblica di Arcadia è una micronazione leonense fondata l'11 dicembre 2021 da Andrea Lazarev e alcuni suoi seguaci. Arcadia si distingue dalle altre micronazioni leonensi per il suo approccio pragmatico e per la sua burocrazia snella. La micronazione ha anche un proprio sito web https://repubblicadiarcadia.it/ e una propria community su Telegram @Repubblica_Arcadia",
+    "cos'è la repubblica di lumenaria": "La Repubblica di Lumenaria è una mcronazione fondata da Filippo Zanetti il 4 febbraio del 2020. Lumenaria è stata la micronazione più longeva della storia leonense, essendo sopravvissuta per oltre 3 anni. La micronazione e ha influenzato profondamente le altre micronazioni leonensi, che hanno coesistito con essa. Tra i motivi della sua longevità ci sono la sua burocrazia più vicina a quella di uno stato reale, la sua comunità attiva e una produzione culturale di alto livello",
+    "chi è salvatore giordano": "Salvatore Giordano è un cittadino storico di Lumenaria",
+    "da dove deriva il nome arcadia": "Il nome Arcadia deriva da un'antica regione della Grecia, simbolo di bellezza naturale e armonia. È stato scelto per rappresentare i valori di libertà e creatività che la micronazione promuove.",
+    "da dove deriva il nome lumenaria": "Il nome Lumenaria prende ispirazione dai lumi facendo riferimento alla corrente illuminista del '700, ma anche da Piazza dei Lumi, sede dell'Accademia delle Micronazioni",
+    "da dove deriva il nome leonia": "Il nome Leonia si rifa al cognome del suo fondatore Carlo Cesare Orlando, al tempo Davide Leone. Inizialmente il nome doveva essere temporaneo, ma poi è stato mantenuto come nome della micronazione",
+    "cosa si intende per open source": "Il termine 'open source' si riferisce a software il cui codice sorgente è reso disponibile al pubblico, consentendo a chiunque di visualizzarlo, modificarlo e distribuirlo. Questo approccio promuove la collaborazione e l'innovazione nella comunità di sviluppo software.",
+    "arcadiaai è un software libero": "Sì, ArcadiaAI è un software libero e open source, il che significa che chiunque può utilizzarlo, modificarlo e distribuirlo secondo i termini della licenza GNU GPL v3.0.",
+    "cos'è un chatbot": "Un chatbot è un programma informatico progettato per simulare una conversazione con gli utenti, spesso utilizzando tecnologie di intelligenza artificiale. I chatbot possono essere utilizzati per fornire assistenza, rispondere a domande o semplicemente intrattenere.",
+    "sotto che licenza sei distribuita": "ArcadiaAI è distribuita sotto la licenza GNU GPL v3.0, che consente la modifica e la distribuzione del codice sorgente, garantendo la libertà di utilizzo e condivisione.",
+    "sai usare telegraph": "Sì, posso pubblicare contenuti su Telegraph! Se vuoi che pubblichi qualcosa, dimmi semplicemente 'Scrivimi un saggio su [argomento] e pubblicalo su Telegraph' e lo farò per te!",
+    "puoi pubblicare su telegraph": "Certamente! Posso generare contenuti e pubblicarli su Telegraph. Prova a chiedermi: 'Scrivimi un saggio su Roma e pubblicalo su Telegraph'",
+    "come usare telegraph": "Per usare Telegraph con me, basta che mi chiedi di scrivere qualcosa e di pubblicarlo su Telegraph. Ad esempio: 'Scrivimi un articolo sulla storia di Roma e pubblicalo su Telegraph'",
+    "cos'è CES": "CES è l'acronimo di Cogito Ergo Sum, un modello di intelligenza artificiale openspurce sviluppato da Mirko Yuri Donato. Attualmente sono disponibili due versioni: CES 1.0 (Cohere) e CES 1.5 (Gemini).",
+    "cos'è la modalità sperimentale": "La modalità sperimentale è una funzionalità di ArcadiaAI che consente di testare nuove funzionalità e miglioramenti prima del rilascio ufficiale. Può includere nuove capacità, modelli o strumenti.",
+    "cos'è la modalità sviluppatore": "La modalità sviluppatore è una funzionalità di ArcadiaAI che consente agli sviluppatori di testare e implementare nuove funzionalità, modelli o strumenti. È progettata per facilitare lo sviluppo e il miglioramento continuo del chatbot.",
+    "che differenza c'è tra la modalità sperimentale e la modalità sviluppatore": "La modalità sperimentale è destinata agli utenti finali per testare nuove funzionalità, mentre la modalità sviluppatore è per gli sviluppatori che vogliono implementare e testare nuove funzionalità o modelli. Entrambe le modalità possono coesistere e migliorare l'esperienza utente.",
+    "cos'è CES Plus": "CES Plus è una versione avanzata di CES, ottimizzata nei ragionamenti e nella generazione di contenuti",
+    "cos'è CES 1.0": "CES 1.0 è la prima versione del modello CES, sviluppato da Mirko Yuri Donato. Utilizza la tecnologia Cohere per generare contenuti e rispondere a domande. Tieni presente che questa versione verrà dismessa a partire dal 20 Maggio 2025.",
+    "cos'è CES 1.5": "CES 1.5 è la versione più recente del modello CES, sviluppato da Mirko Yuri Donato. Utilizza la tecnologia Gemini per generare contenuti e rispondere a domande. Questa versione offre prestazioni migliorate rispetto a CES 1.0 ma inferiori a CES Plus",
+    "come attivo la modalità sperimentale": "Per attivare la modalità sperimentale, basta chiedere a ArcadiaAI di attivarla usando il comando \"@impostazioni modalità sperimentale attiva\". Una volta attivata, potrai testare nuove funzionalità e miglioramenti.",
+    "come attivo la modalità sviluppatore": "Per attivare la modalità sviluppatore, basta chiedere a ArcadiaAI di attivarla usando il comando \"@impostazioni modalità sviluppatore attiva\". Una volta attivata, potrai testare e implementare nuove funzionalità e modelli.",
+    "come disattivo la modalità sperimentale": "Per disattivare la modalità sperimentale, basta chiedere a ArcadiaAI di disattivarla usando il comando \"@impostazioni modalità sperimentale disattiva\". Una volta disattivata, non potrai più testare le nuove funzionalità.",
+    "codice sorgente arcadiaai": "Il codice sorgente di ArcadiaAI è pubblico! Puoi trovarlo con il comando @codice_sorgente oppure visitando la repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI",
+    "sai cercare su internet": "Sì, posso cercare informazioni su Internet. Se hai bisogno di qualcosa in particolare dimmi @cerca e il termine di ricerca e io lo farò per te",
+    "sai usare google": "No, non posso usare Google, perché sono progrmmato per cercare solamente su DuckDuckGo. Posso cercare informazioni su Internet usando DuckDuckGo. Se hai bisogno di qualcosa in particolare dimmi @cerca e il termine di ricerca e io lo farò per te",
+    "come vengono salvate le conversazioni": "Le conversazioni vengoono salvate in locale sul tuo browser. Non vengono memorizzate su server esterni e non vengono condivise con terze parti. La tua privacy è importante per noi.",
+    "come posso cancellare le conversazioni": "Puoi cancellare le conversazioni andando nelle impostazioni del tuo browser e cancellando la cache e i cookie. In alternativa, puoi usare il comando @cancella_conversazione per eliminare la cronologia delle chat.",
+    "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
+}
+
+# Trigger per le risposte predefinite
+trigger_phrases = {
+    "chi sei": ["chi sei", "chi sei tu", "tu chi sei", "presentati", "come ti chiami", "qual è il tuo nome"],
+    "cosa sai fare": ["cosa sai fare", "cosa puoi fare", "funzionalità", "capacità", "a cosa servi", "in cosa puoi aiutarmi"],
+    "chi è tobia testa": ["chi è tobia testa", "informazioni su tobia testa", "parlami di tobia testa", "chi è tobia teseo"],
+    "chi è mirko yuri donato": ["chi è mirko yuri donato", "informazioni su mirko yuri donato", "parlami di mirko yuri donato", "chi ha creato arcadiaai"],
+    "chi è il presidente di arcadia": ["chi è il presidente di arcadia", "presidente di arcadia", "chi guida arcadia", "capo di arcadia"],
+    "chi è il presidente di lumenaria": ["chi è il presidente di lumenaria", "presidente di lumenaria", "chi guida lumenaria", "capo di lumenaria", "carlo cesare orlando presidente"],
+    "cos'è nova surf": ["cos'è nova surf", "che cos'è nova surf", "parlami di nova surf", "a cosa serve nova surf"],
+    "chi ti ha creato": ["chi ti ha creato", "chi ti ha fatto", "da chi sei stato creato", "creatore di arcadiaai"],
+    "chi è ciua grazisky": ["chi è ciua grazisky", "informazioni su ciua grazisky", "parlami di ciua grazisky"],
+    "chi è carlo cesare orlando": ["chi è carlo cesare orlando", "informazioni su carlo cesare orlando", "parlami di carlo cesare orlando", "chi è davide leone"],
+    "chi è omar lanfredi": ["chi è omar lanfredi", "informazioni su omar lanfredi", "parlami di omar lanfredi"],
+    "cos'è arcadiaai": ["cos'è arcadiaai", "che cos'è arcadiaai", "parlami di arcadiaai", "a cosa serve arcadiaai"],
+    "sotto che licenza è distribuito arcadiaa": ["sotto che licenza è distribuito arcadiaa", "licenza arcadiaai", "che licenza usa arcadiaai", "arcadiaai licenza"],
+    "cosa sono le micronazioni": ["cosa sono le micronazioni", "micronazioni", "che cosa sono le micronazioni", "parlami delle micronazioni"],
+    "cos'è la repubblica di arcadia": ["cos'è la repubblica di arcadia", "repubblica di arcadia", "che cos'è la repubblica di arcadia", "parlami della repubblica di arcadia", "arcadia micronazione"],
+    "cos'è la repubblica di lumenaria": ["cos'è la repubblica di lumenaria", "repubblica di lumenaria", "che cos'è la repubblica di lumenaria", "parlami della repubblica di lumenaria", "lumenaria micronazione"],
+    "chi è salvatore giordano": ["chi è salvatore giordano", "informazioni su salvatore giordano", "parlami di salvatore giordano"],
+    "da dove deriva il nome arcadia": ["da dove deriva il nome arcadia", "origine nome arcadia", "significato nome arcadia", "perché si chiama arcadia"],
+    "da dove deriva il nome lumenaria": ["da dove deriva il nome lumenaria", "origine nome lumenaria", "significato nome lumenaria", "perché si chiama lumenaria"],
+    "da dove deriva il nome leonia": ["da dove deriva il nome leonia", "origine nome leonia", "significato nome leonia", "perché si chiama leonia"],
+    "cosa si intende per open source": ["cosa si intende per open source", "open source significato", "che significa open source", "definizione di open source"],
+    "arcadiaai è un software libero": ["arcadiaai è un software libero", "arcadiaai software libero", "arcadiaai è libero", "software libero arcadiaai"],
+    "cos'è un chatbot": ["cos'è un chatbot", "chatbot significato", "che significa chatbot", "definizione di chatbot"],
+    "sotto che licenza sei distribuita": ["sotto che licenza sei distribuita", "licenza di arcadiaai", "che licenza usi", "arcadiaai licenza"],
+    "sai usare telegraph": ["sai pubblicare su telegraph", "funzioni su telegraph", "hai telegraph integrato", "telegraph", "puoi usare telegraph"],
+    "puoi pubblicare su telegraph": ["puoi pubblicare su telegraph", "pubblicare su telegraph", "supporti telegraph"],
+    "come usare telegraph": ["come usare telegraph", "come funziona telegraph", "istruzioni telegraph"],
+    "cos'è CES" : ["cos è CES", "CES", "che cos'è CES", "definizione di CES"],
+    "cos'è la modalità sperimentale": ["cos'è la modalità sperimentale", " parlami della modalità sperimentale", "che cos'è la modalità sperimentale"],
+    "cos'è la modalità sviluppatore": ["cos'è la modalità sviluppatore", " parlami della modalità sviluppatore", "che cos'è la modalità sviluppatore"],
+    "che differenza c'è tra la modalità sperimentale e la modalità sviluppatore": ["che differenza c'è tra la modalità sperimentale e la modalità sviluppatore", "differenza tra modalità sperimentale e sviluppatore", "modalità sperimentale vs sviluppatore"],
+    "cos'è CES Plus": ["cos'è CES Plus", "che cazzo è CES Plus", "che cos'è CES Plus", "definizione di CES Plus"],
+    "cos'è CES 1.0": ["cos'è CES 1.0", "che cos'è CES 1.0", "definizione di CES 1.0"],
+    "cos'è CES 1.5": ["cos'è CES 1.5", "che cos'è CES 1.5", "definizione di CES 1.5"],
+    "come attivo la modalità sperimentale": ["come attivo la modalità sperimentale", "attivare modalità sperimentale", "come usare la modalità sperimentale"],
+    "come attivo la modalità sviluppatore": ["come attivo la modalità sviluppatore", "attivare modalità sviluppatore", "come usare la modalità sviluppatore"],
+    "come disattivo la modalità sperimentale": ["come disattivo la modalità sperimentale", "disattivare modalità sperimentale", "come usare la modalità sperimentale"],
+    "come disattivo la modalità sviluppatore": ["come disattivo la modalità sviluppatore", "disattivare modalità sviluppatore", "come usare la modalità sviluppatore"],
+    "codice sorgente arcadiaai": [
+    "dove posso trovare il codice sorgente di arcadiaai",
+    "codice sorgente arcadiaai",
+    "dove trovo il codice sorgente di arcadiaai",
+    "dove si trova il codice sorgente di arcadiaai",
+    "come posso vedere il codice sorgente di arcadiaai",
+    "codice sorgente di arcadiaai",
+    "dove posso trovare il codice sorgente tuo",
+    "dove trovo il codice sorgente tuo"],
+    "sai cercare su internet": ["sai cercare su internet", "cerca su internet", "puoi cercare su internet", "cerca"],
+    "sai usare google": ["sai usare google", "puoi usare google", "cerca su google", "cerca su google per me"],
+    "come vengono salvate le conversazioni": ["come vengono salvate le conversazioni", "dove vengono salvate le conversazioni", "salvataggio conversazioni", "come vengono salvate le chat"],
+    "come posso cancellare le conversazioni": ["come posso cancellare le conversazioni", "cancellare conversazioni", "cancellare chat", "come cancellare le chat"],
+}
+
+import zipfile
+import tempfile
+import importlib.util
+import json
+def load_nsk_extensions():
+    ext_dir = os.path.join(os.path.dirname(__file__), "extensions")
+    print("DEBUG: Contenuto cartella extensions:", os.listdir(ext_dir))
+    if not os.path.exists(ext_dir):
+        os.makedirs(ext_dir)
+    for filename in os.listdir(ext_dir):
+        print("DEBUG: Analizzo file:", filename)
+        if filename.endswith(".nsk") or filename.endswith(".zip"):
+            nsk_path = os.path.join(ext_dir, filename)
+            print("DEBUG: Provo ad aprire:", nsk_path)
+            try:
+                with zipfile.ZipFile(nsk_path, 'r') as zip_ref:
+                    print("DEBUG: File zip aperto:", nsk_path)
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        zip_ref.extractall(temp_dir)
+                        print("DEBUG: Estratti file:", os.listdir(temp_dir))
+                        manifest_path = os.path.join(temp_dir, "manifest.json")
+                        print("DEBUG: Cerco manifest:", manifest_path, "esiste?", os.path.exists(manifest_path))
+                        if not os.path.exists(manifest_path):
+                            print(f"Manifest mancante in {filename}")
+                            continue
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            manifest = json.load(f)
+                        entrypoint = manifest.get("entrypoint", "main.py")
+                        entry_path = os.path.join(temp_dir, entrypoint)
+                        print("DEBUG: Cerco entrypoint:", entry_path, "esiste?", os.path.exists(entry_path))
+                        if not os.path.exists(entry_path):
+                            print(f"Entrypoint mancante in {filename}")
+                            continue
+                        module_name = f"nsk_{filename.replace('.nsk','')}"
+                        spec = importlib.util.spec_from_file_location(module_name, entry_path)
+                        module = importlib.util.module_from_spec(spec)
+                        try:
+                            spec.loader.exec_module(module)
+                            if hasattr(module, "can_handle") and hasattr(module, "handle"):
+                                EXTENSIONS[module_name] = module
+                                print(f"Estensione caricata: {module_name}")
+                            else:
+                                print(f"Estensione {module_name} non valida (manca can_handle o handle)")
+                        except Exception as e:
+                            print(f"Errore caricamento estensione {filename}: {e}")
+            except Exception as e:
+                print(f"Errore apertura zip {filename}: {e}")
+    print("Estensioni caricate:", list(EXTENSIONS.keys()))
+load_nsk_extensions()
+
+# Funzione per pubblicare su Telegraph
+def publish_to_telegraph(title, content):
+    """Pubblica contenuti su Telegraph."""
+    url = "https://api.telegra.ph/createPage"
+    headers = {"Content-Type": "application/json"}
+    
+    paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
+    content_formatted = [{"tag": "p", "children": [p]} for p in paragraphs[:50]]
+    
+    payload = {
+        "access_token": TELEGRAPH_API_KEY,
+        "title": title[:256],
+        "content": content_formatted,
+        "author_name": "ArcadiaAI"
+    }
+    
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=15)
+        res.raise_for_status()
+        result = res.json()
+        if result.get("ok"):
+            return result.get("result", {}).get("url", "⚠️ URL non disponibile")
+        return "⚠️ Pubblicazione fallita"
+    except requests.exceptions.RequestException as e:
+        print(f"Errore pubblicazione Telegraph (connessione): {str(e)}")
+        return f"⚠️ Errore di connessione a Telegraph: {str(e)}"
+    except Exception as e:
+        print(f"Errore pubblicazione Telegraph: {str(e)}")
+        return f"⚠️ Errore durante la pubblicazione: {str(e)}"
+
+# Funzione per generare contenuti con Gemini (CES 1.5)
+def generate_with_gemini(prompt, title):
+    """Genera contenuti con Gemini e pubblica su Telegraph."""
+    if not gemini_model:
+        return None, "❌ Gemini (CES 1.5) non è configurato"
+    
+    try:
+        # Aggiungi contesto identitario
+        full_prompt = (
+            "Sei ArcadiaAI, un chatbot open source creato da Mirko Yuri Donato. "
+            "Stai generando un contenuto che verrà pubblicato su Telegraph. "
+            "Il contenuto deve essere accurato, ben strutturato e mantenere "
+            "uno stile professionale. Ecco la richiesta:\n\n"
+            f"{prompt}"
+        )
+        
+        response = gemini_model.generate_content(
+            full_prompt,
+            generation_config={
+                "max_output_tokens": 3000,
+                "temperature": 0.8
+            }
+        )
+        
+        if not response.text:
+            return None, "❌ Impossibile generare il contenuto"
+        
+        telegraph_url = publish_to_telegraph(title, response.text)
+        return response.text, telegraph_url
+    
+    except Exception as e:
+        print(f"Errore generazione contenuto Gemini: {str(e)}")
+        return None, f"❌ Errore durante la generazione: {str(e)}"    
+
+def extract_text_from_file(file_data, mime_type):
+    """Estrae testo da diversi tipi di file."""
+    try:
+        if mime_type == 'application/pdf':
+            pdf_reader = PdfReader(io.BytesIO(file_data))
+            text = ""
+            for page in pdf_reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+            return text.strip()
+        
+        elif mime_type in ['text/plain', 'text/csv']:
+            return file_data.decode('utf-8')
+        
+        elif mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                          'application/msword']:
+            import docx # type: ignore
+            doc = docx.Document(io.BytesIO(file_data))
+            return "\n".join([para.text for para in doc.paragraphs])
+        
+        elif mime_type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                          'application/vnd.ms-excel']:
+            wb = load_workbook(io.BytesIO(file_data))
+            text = ""
+            for sheet in wb:
+                for row in sheet.iter_rows(values_only=True):
+                    text += " ".join(str(cell) for cell in row if cell) + "\n"
+            return text.strip()
+        
+        else:
+            return None
+    
+    except Exception as e:
+        print(f"Errore estrazione testo da file: {str(e)}")
+        return None
+
+import requests
+from bs4 import BeautifulSoup
+import urllib.parse
+import re
+from datetime import datetime
+from functools import lru_cache 
+
+@lru_cache(maxsize=100) 
+def search_web(query, lang="it-IT"):
+    """Ricerca avanzata con migliori risultati e filtri"""
+    try:
+        # Fase 1: Ricerca DuckDuckGo
+        ddg_results = search_duckduckgo(query, lang)
+        
+        # Fase 2: Ricerca alternativa su Brave (fallback)
+        if not ddg_results or len(ddg_results) < 3:
+            brave_results = search_brave(query, lang)
+            results = (ddg_results or []) + (brave_results or [])
+        else:
+            results = ddg_results
+        
+        # Filtra e classifica i risultati
+        filtered = filter_results(results, query)
+        
+        # Verifica accessibilità
+        verified = verify_results(filtered)
+        
+        return verified[:3]  # Restituisce i 3 migliori
+    
+    except Exception as e:
+        print(f"Errore ricerca: {str(e)}")
+        return None
+
+def search_duckduckgo(query, lang):
+    """Ricerca DuckDuckGo ottimizzata"""
+    url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}&kl={lang[:2]}-{lang[-2:]}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": lang
+    }
+    
+    try:
+        res = requests.get(url, headers=headers, timeout=12)
+        res.raise_for_status()
+        
+        soup = BeautifulSoup(res.text, 'html.parser')
+        results = []
+        
+        for result in soup.find_all('div', class_='result'):
+            link = result.find('a', class_='result__a')
+            if link and link.has_attr('href'):
+                href = extract_real_url(link['href'])
+                if href:
+                    title = link.get_text(strip=True)
+                    snippet = result.find('a', class_='result__snippet')
+                    snippet_text = snippet.get_text(' ', strip=True) if snippet else ""
+                    
+                    results.append({
+                        'url': href,
+                        'title': title,
+                        'snippet': snippet_text,
+                        'source': 'duckduckgo'
+                    })
+        
+        return results[:5]  # Limita a 5 risultati per fonte
+    
+    except Exception as e:
+        print(f"Errore DDG: {str(e)}")
+        return None
+
+def search_brave(query, lang):
+    """Ricerca alternativa su Brave"""
+    url = f"https://search.brave.com/search?q={urllib.parse.quote(query)}&lr=lang_{lang[:2]}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": lang
+    }
+    
+    try:
+        res = requests.get(url, headers=headers, timeout=12)
+        res.raise_for_status()
+        
+        soup = BeautifulSoup(res.text, 'html.parser')
+        results = []
+        
+        for result in soup.select('.result'):
+            link = result.find('a')
+            if link and link.has_attr('href'):
+                href = extract_real_url(link['href'])
+                if href:
+                    title = link.get_text(strip=True)
+                    snippet = result.find('.snippet-content')
+                    snippet_text = snippet.get_text(' ', strip=True) if snippet else ""
+                    
+                    results.append({
+                        'url': href,
+                        'title': title,
+                        'snippet': snippet_text,
+                        'source': 'brave'
+                    })
+        
+        return results[:5]
+    
+    except Exception as e:
+        print(f"Errore Brave: {str(e)}")
+        return None
+
+
+
+def extract_real_url(href):
+    """Estrae l'URL reale dai redirect"""
+    if href.startswith('http'):
+        return href
+    elif href.startswith('//duckduckgo.com/l/?uddg='):
+        parsed = urllib.parse.urlparse('https:' + href)
+        query = urllib.parse.parse_qs(parsed.query)
+        return urllib.parse.unquote(query.get('uddg'), [''])[0] or None
+    return None
+
+def filter_results(results, query):
+    """Filtra e classifica i risultati"""
+    if not results:
+        return []
+    
+    # Filtra duplicati
+    unique = {r['url']: r for r in results}.values()
+    
+    # Classifica per rilevanza
+    query_words = set(query.lower().split())
+    ranked = []
+    
+    for result in unique:
+        title = result['title'].lower()
+        snippet = result['snippet'].lower()
+        
+        # Punteggio basato su corrispondenza parole chiave
+        title_score = sum(1 for word in query_words if word in title)
+        snippet_score = sum(1 for word in query_words if word in snippet)
+        
+        # Penalizza siti non affidabili
+        domain = urllib.parse.urlparse(result['url']).netloc
+        trust_score = 1.0
+        if any(bad in domain for bad in ['porn', 'adult', 'spam', 'scam']):
+            trust_score = 0.1
+        
+        total_score = (title_score * 2 + snippet_score) * trust_score
+        ranked.append((total_score, result))
+    
+    # Ordina per punteggio
+    ranked.sort(reverse=True, key=lambda x: x[0])
+    return [r[1] for r in ranked]
+
+def verify_results(results):
+    """Verifica l'accessibilità dei risultati"""
+    verified = []
+    
+    for result in results[:5]:  # Verifica solo i primi 5 per performance
+        try:
+            # Controlla rapidamente l'header della risposta
+            head = requests.head(result['url'], timeout=5, allow_redirects=True)
+            if head.status_code == 200:
+                # Aggiungi data di verifica
+                result['verified_at'] = datetime.now().isoformat()
+                verified.append(result)
+        except:
+            continue
+    
+    return verified or results[:3]  # Fallback se la verifica fallisce
+
+def extract_content(url):
+    """Estrae contenuto avanzato da una pagina"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "it-IT,it;q=0.9"
+    }
+    
+    try:
+        res = requests.get(url, headers=headers, timeout=20)
+        res.raise_for_status()
+        
+        if 'text/html' not in res.headers.get('Content-Type', ''):
+            return None
+        
+        soup = BeautifulSoup(res.text, 'lxml')
+        
+        # Rimozione elementi inutili
+        for element in soup(['script', 'style', 'nav', 'footer', 'iframe', 'header', 'aside', 'form', 'button', 'noscript']):
+            element.decompose()
+        
+        # Strategie di estrazione
+        content = extract_article_content(soup) or extract_main_content(soup)
+        
+        if content:
+            # Pulizia del testo
+            text = ' '.join(content.get_text(' ', strip=True).split())
+            text = re.sub(r'\s+', ' ', text)
+            return text[:2000]  # Limita a 2000 caratteri
+        
+        return None
+    
+    except Exception as e:
+        print(f"Errore estrazione {url}: {str(e)}")
+        return None
+
+def estrai_testo_da_url(url):
+    """Estrae il testo principale da una pagina web (molto semplice, solo per demo)."""
+    try:
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, "html.parser")
+        # Prendi tutti i paragrafi e uniscili
+        paragraphs = soup.find_all("p")
+        testo = " ".join(p.get_text() for p in paragraphs)
+        return testo.strip()
+    except Exception as e:
+        print(f"Errore estrazione testo da {url}: {e}")
+        return ""
+    
+def extract_article_content(soup):
+    """Cerca contenuto in tag article/section"""
+    for tag in ['article', 'main', 'section', 'div.article', 'div.content']:
+        element = soup.select_one(tag) if '.' in tag else soup.find(tag)
+        if element and len(element.get_text(strip=True)) > 100:
+            return element
+    return None
+
+def extract_main_content(soup):
+    """Estrae il contenuto principale con euristica"""
+    paragraphs = soup.find_all('p')
+    if len(paragraphs) > 3:
+        container = paragraphs[0].parent
+        if container and len(container.get_text(strip=True)) > 200:
+            return container
+    return None@app.route("/api/ces-image", methods=["POST"])
+def ces_image():
+    try:
+        data = request.get_json()
+        prompt = data.get("prompt", "").strip() if data else ""
+        print(f"[CES-IMAGE] Prompt ricevuto: {prompt}")
+
+        if not prompt:
+            return jsonify({"error": "Prompt mancante o vuoto."}), 400
+
+        # 🛡️ Filtro anti-abusi: parole non consentite
+        PAROLE_BANNATE = [
+            "nudo", "nudità", "naked", "porn", "porno", "pornografico", "sessuale",
+            "sex", "sesso", "genitali", "masturb", "boobs", "dildo", "nsfw", "erotico", 
+            "fetish", "xxx", "pene", "vagina", "anale", "seni", "hot", "orgasmo"
+        ]
+
+        if any(parola in prompt.lower() for parola in PAROLE_BANNATE):
+            print(f"[CES-IMAGE] ❌ Prompt rifiutato per contenuto vietato: {prompt}")
+            return jsonify({"error": "❌ Questo prompt non è consentito. Per favore, rispetta le linee guida."}), 403
+
+        # Codifica il prompt per l'URL
+        encoded_prompt = urllib.parse.quote(prompt)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+
+        return jsonify({"image_url": image_url})
+
+    except Exception as e:
+        print(f"[CES-IMAGE] Errore interno: {e}")
+        return jsonify({"error": f"Errore interno: {str(e)}"}), 500
+
+from flask import Flask, Response
+@app.route('/')
+def home():
+    html = """
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArcadiaAI Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Stili esistenti preservati */
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>🧠 ArcadiaAI</h2>
+        <div id="api-selection">
+            <label for="api-provider">Modello:</label>
+            <select id="api-provider">
+                <option value="gemini">CES 1.5</option>
+                <option value="cesplus">CES Plus</option>
+                <option value="ces360">CES 360</option>
+                <option value="deepseek">DeepSeek R1</option>
+            </select>
+        </div>
+        <button id="new-chat-btn">➕ Nuova Chat</button>
+        <button id="canvas-toggle-btn">🎨 Canvas</button>
+        <button id="clear-chats-btn" style="margin-top: 10px;">🗑️ Elimina Tutto</button>
+        <button id="settings-btn">⚙️ Impostazioni</button>
+        <div id="settings-panel" style="display: none; padding: 10px;">
+            <label for="language-select">Lingua:</label>
+            <select id="language-select">
+                <option value="it">Italiano</option>
+                <option value="en">English</option>
+            </select>
+            <br>
+            <label for="theme-select">Tema:</label>
+            <select id="theme-select">
+                <option value="light">Chiaro</option>
+                <option value="dark">Scuro</option>
+            </select>
+            <br>
+            <label><input type="checkbox" id="dev-mode-toggle"> Modalità sviluppatore</label><br>
+            <label><input type="checkbox" id="experimental-mode-toggle"> Modalità sperimentale</label>
+        </div>
+        <ul id="chat-list"></ul>
+    </div>
+    <div id="chat-area">
+        <div id="status-message" style="display: none; padding: 5px; background-color: #e0f7fa; border-radius: 5px; margin-bottom: 10px; text-align: center; color: #00796b;">
+        </div>
+        <div id="chatbox"></div>
+        <div id="input-area">
+            <input id="input" type="text" placeholder="Scrivi un messaggio..." autocomplete="off" aria-label="Messaggio">
+            <input type="file" id="file-input" style="display:none" multiple aria-label="Allega file">
+            <button id="attach-btn" title="Allega file" aria-label="Allega file">+</button>
+            <button id="send-btn" aria-label="Invia messaggio">Invia</button>
+        </div>
+    </div>
+
+    <!-- Canvas Overlay -->
+    <div id="canvas-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000;">
+        <div style="background:#fff; margin:20px auto; padding:20px; width:80%; max-width:900px; border-radius:10px; max-height:90vh; overflow:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h2>🎨 Canvas Editor</h2>
+                <button id="close-canvas-btn" style="background:#ff4444; color:white; border:none; padding:5px 10px; border-radius:5px;">Chiudi</button>
+            </div>
+            
+            <div id="canvas-toolbar" style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="canvas-tool" data-type="testo">✏️ Testo</button>
+                <button class="canvas-tool" data-type="codice">{} Codice</button>
+                <button class="canvas-tool" data-type="grafico">📊 Grafico</button>
+                <button id="render-canvas-btn">🔄 Anteprima</button>
+                <select id="canvas-export-type" style="padding:5px;">
+                    <option value="telegraph">Telegraph</option>
+                    <option value="immagine">Immagine</option>
+                    <option value="pdf">PDF</option>
+                </select>
+                <button id="export-canvas-btn">📤 Esporta</button>
+            </div>
+            
+            <div style="display:flex; gap:20px;">
+                <div id="canvas-editor" style="flex:2; border:1px solid #ddd; padding:15px; min-height:500px; background:#f9f9f9;">
+                    <div id="canvas-content" style="position:relative; width:100%; height:500px; background:white; border:1px dashed #ccc; overflow:hidden;">
+                        <!-- Elementi canvas verranno aggiunti qui -->
+                    </div>
+                </div>
+                
+                <div id="canvas-properties" style="flex:1; border:1px solid #ddd; padding:15px;">
+                    <h3>Proprietà Elemento</h3>
+                    <div id="element-properties-form" style="display:none;">
+                        <div style="margin-bottom:10px;">
+                            <label>Tipo:</label>
+                            <input type="text" id="element-type" readonly style="width:100%; padding:5px;">
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <label>Contenuto:</label>
+                            <textarea id="element-content" style="width:100%; height:100px; padding:5px;"></textarea>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <div>
+                                <label>X:</label>
+                                <input type="number" id="element-x" style="width:60px; padding:5px;">
+                            </div>
+                            <div>
+                                <label>Y:</label>
+                                <input type="number" id="element-y" style="width:60px; padding:5px;">
+                            </div>
+                        </div>
+                        <button id="update-element-btn" style="background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:5px;">Aggiorna</button>
+                        <button id="delete-element-btn" style="background:#ff4444; color:white; border:none; padding:5px 10px; border-radius:5px; margin-left:10px;">Elimina</button>
+                    </div>
+                    <div id="no-element-selected" style="color:#666; text-align:center; margin-top:50px;">
+                        Seleziona un elemento per modificarlo
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="message-display"></div>
+
+    <script src="/static/script.js"></script>
+    <script src="https://js.puter.com/v2/"></script>
+    <script>
+        // Inizializzazione Puter.js (esistente)
+        document.addEventListener("DOMContentLoaded", async () => {
+            if (typeof puter === "undefined") {
+                alert("❌ Puter.js non è stato caricato correttamente!");
+                return;
+            }
+
+            console.log("✅ Puter.js caricato con successo");
+            cesAi = await puter.use("meta-llama/llama-3.3-70b-instruct");
+            console.log("Modello attivo:", cesAi.model);
+        });
+
+        // Gestione Canvas
+        let currentCanvas = null;
+        let selectedElement = null;
+
+        // Toggle Canvas UI
+        document.getElementById('canvas-toggle-btn').addEventListener('click', () => {
+            document.getElementById('canvas-overlay').style.display = 'block';
+            initCanvas();
+        });
+
+        document.getElementById('close-canvas-btn').addEventListener('click', () => {
+            document.getElementById('canvas-overlay').style.display = 'none';
+        });
+
+        // Strumenti Canvas
+        document.querySelectorAll('.canvas-tool').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const type = this.dataset.type;
+                addCanvasElement(type);
+            });
+        });
+
+        function initCanvas() {
+            const canvasContent = document.getElementById('canvas-content');
+            canvasContent.innerHTML = '';
+            
+            if (!currentCanvas) {
+                currentCanvas = {
+                    id: 'canvas-' + Date.now(),
+                    elements: []
+                };
+            }
+
+            // Render elementi esistenti
+            currentCanvas.elements.forEach(el => {
+                renderCanvasElement(el);
+            });
+        }
+
+        function addCanvasElement(type) {
+            const newElement = {
+                id: 'el-' + Date.now(),
+                type: type,
+                content: type === 'codice' ? '// Scrivi il tuo codice qui' : 
+                        type === 'grafico' ? 'Grafico generato' : 'Nuovo testo',
+                position: { x: 50, y: 50 },
+                style: {}
+            };
+            
+            currentCanvas.elements.push(newElement);
+            renderCanvasElement(newElement);
+        }
+
+        function renderCanvasElement(element) {
+            const canvas = document.getElementById('canvas-content');
+            const el = document.createElement('div');
+            el.className = 'canvas-element';
+            el.dataset.id = element.id;
+            
+            el.style.position = 'absolute';
+            el.style.left = element.position.x + 'px';
+            el.style.top = element.position.y + 'px';
+            el.style.padding = '10px';
+            el.style.background = '#fff';
+            el.style.border = '1px solid #ddd';
+            el.style.cursor = 'move';
+            el.style.maxWidth = '300px';
+            
+            if (element.type === 'codice') {
+                el.innerHTML = `<pre>${element.content}</pre>`;
+                el.style.background = '#f5f5f5';
+            } else if (element.type === 'grafico') {
+                el.innerHTML = `<div class="graph-placeholder">${element.content}</div>`;
+                el.style.textAlign = 'center';
+            } else {
+                el.textContent = element.content;
+            }
+            
+            // Selezione elemento
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectCanvasElement(element, el);
+            });
+            
+            // Drag and drop
+            el.addEventListener('mousedown', startDrag);
+            
+            canvas.appendChild(el);
+        }
+
+        function selectCanvasElement(element, htmlElement) {
+            selectedElement = element;
+            
+            // Highlight elemento selezionato
+            document.querySelectorAll('.canvas-element').forEach(el => {
+                el.style.boxShadow = 'none';
+            });
+            htmlElement.style.boxShadow = '0 0 0 2px #4CAF50';
+            
+            // Popola form proprietà
+            document.getElementById('element-properties-form').style.display = 'block';
+            document.getElementById('no-element-selected').style.display = 'none';
+            
+            document.getElementById('element-type').value = element.type;
+            document.getElementById('element-content').value = element.content;
+            document.getElementById('element-x').value = element.position.x;
+            document.getElementById('element-y').value = element.position.y;
+        }
+
+        // Gestione drag and drop
+        function startDrag(e) {
+            const element = e.target.closest('.canvas-element');
+            if (!element) return;
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startLeft = parseInt(element.style.left) || 0;
+            const startTop = parseInt(element.style.top) || 0;
+            
+            function moveHandler(e) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                
+                element.style.left = (startLeft + dx) + 'px';
+                element.style.top = (startTop + dy) + 'px';
+            }
+            
+            function upHandler() {
+                document.removeEventListener('mousemove', moveHandler);
+                document.removeEventListener('mouseup', upHandler);
+                
+                // Aggiorna posizione nell'oggetto canvas
+                const elementId = element.dataset.id;
+                const elementObj = currentCanvas.elements.find(el => el.id === elementId);
+                if (elementObj) {
+                    elementObj.position = {
+                        x: parseInt(element.style.left),
+                        y: parseInt(element.style.top)
+                    };
+                }
+            }
+            
+            document.addEventListener('mousemove', moveHandler);
+            document.addEventListener('mouseup', upHandler);
+        }
+
+        // Aggiornamento elementi
+        document.getElementById('update-element-btn').addEventListener('click', () => {
+            if (!selectedElement) return;
+            
+            selectedElement.content = document.getElementById('element-content').value;
+            selectedElement.position = {
+                x: parseInt(document.getElementById('element-x').value) || 0,
+                y: parseInt(document.getElementById('element-y').value) || 0
+            };
+            
+            // Re-render
+            initCanvas();
+        });
+
+        // Elimina elemento
+        document.getElementById('delete-element-btn').addEventListener('click', () => {
+            if (!selectedElement) return;
+            
+            currentCanvas.elements = currentCanvas.elements.filter(el => el.id !== selectedElement.id);
+            initCanvas();
+            document.getElementById('element-properties-form').style.display = 'none';
+            document.getElementById('no-element-selected').style.display = 'block';
+        });
+
+        // Anteprima Canvas
+        document.getElementById('render-canvas-btn').addEventListener('click', () => {
+            const chatbox = document.getElementById('chatbox');
+            chatbox.innerHTML += `<div class="assistant">🎨 Anteprima Canvas:<br>${JSON.stringify(currentCanvas, null, 2)}</div>`;
+            chatbox.scrollTop = chatbox.scrollHeight;
+        });
+
+        // Esporta Canvas
+        document.getElementById('export-canvas-btn').addEventListener('click', async () => {
+            const exportType = document.getElementById('canvas-export-type').value;
+            
+            try {
+                const response = await fetch('/api/export-canvas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        canvas: currentCanvas,
+                        type: exportType
+                    })
+                });
+                
+                const result = await response.json();
+                alert(`Esportazione completata: ${result.url || result.message}`);
+            } catch (error) {
+                alert(`Errore durante l'esportazione: ${error.message}`);
+            }
+        });
+
+        // Gestione messaggi esistente (preservata)
+        async function handleMessage(userInput) {
+            const selectedModel = document.getElementById("api-provider").value;
+
+            if (selectedModel === "ces360") {
+                try {
+                    const response = await cesAi.chat(userInput);
+                    renderMessage("assistant", response.text || "❌ Nessuna risposta.");
+                } catch (e) {
+                    renderMessage("assistant", "❌ Errore CES 360 (Puter.js): " + e.message);
+                }
+            } else {
+                try {
+                    const res = await fetch("/api/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message: userInput, model: selectedModel })
+                    });
+                    const data = await res.json();
+                    renderMessage("assistant", data.response || "❌ Nessuna risposta dal backend.");
+                } catch (e) {
+                    renderMessage("assistant", "❌ Errore server: " + e.message);
+                }
+            }
+        }
+
+        function renderMessage(role, text) {
+            const chatbox = document.getElementById("chatbox");
+            const messageElem = document.createElement("div");
+            messageElem.className = role;
+            messageElem.innerHTML = `<strong>${role === "user" ? "Tu" : "ArcadiaAI"}:</strong> ${text}`;
+            chatbox.appendChild(messageElem);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        document.getElementById("send-btn").addEventListener("click", () => {
+            const input = document.getElementById("input");
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            // Supporto comandi Canvas nella chat
+            if (msg.startsWith('@canvas')) {
+                const canvasCmd = msg.substring(7).trim();
+                handleCanvasCommand(canvasCmd);
+                input.value = "";
+                return;
+            }
+            
+            renderMessage("user", msg);
+            input.value = "";
+            handleMessage(msg);
+        });
+
+        // Gestione comandi Canvas da chat
+        function handleCanvasCommand(command) {
+            const chatbox = document.getElementById("chatbox");
+            
+            if (command === 'nuovo' || command === 'new') {
+                currentCanvas = null;
+                document.getElementById('canvas-overlay').style.display = 'block';
+                initCanvas();
+                renderMessage("assistant", "🆕 Nuovo canvas pronto! Usa l'editor per aggiungere contenuti.");
+            } 
+            else if (command.startsWith('aggiungi ') || command.startsWith('add ')) {
+                const parts = command.split(' ');
+                if (parts.length >= 4) {
+                    const type = parts[1];
+                    const content = parts.slice(2, -2).join(' ');
+                    const x = parseInt(parts[parts.length-2]);
+                    const y = parseInt(parts[parts.length-1]);
+                    
+                    if (!currentCanvas) {
+                        currentCanvas = {
+                            id: 'canvas-' + Date.now(),
+                            elements: []
+                        };
+                    }
+                    
+                    currentCanvas.elements.push({
+                        id: 'el-' + Date.now(),
+                        type: type,
+                        content: content,
+                        position: { x: x, y: y }
+                    });
+                    
+                    renderMessage("assistant", `✅ Aggiunto elemento ${type} al canvas in (${x},${y})`);
+                } else {
+                    renderMessage("assistant", "❌ Formato comando errato. Usa: @canvas aggiungi [tipo] [contenuto] [x] [y]");
+                }
+            }
+            else {
+                renderMessage("assistant", "🔍 Scrivi '@canvas nuovo' per iniziare o '@canvas help' per aiuto");
+            }
+        }
+    </script>
+</body>
+</html> """
+    return Response(html, content_type="text/html; charset=utf-8")
+
+
+def chat_with_ces_plus(user_message, conversation_history, attachments=None):
+    """
+    Versione avanzata di CES con ragionamento passo-passo e messaggi separati.
+    """
+    if not gemini_model:
+        return ["❌ CES Plus non è disponibile al momento."]
+
+    # Prompt identitario forte con istruzioni per il ragionamento
+    IDENTITY_PROMPT = (
+        "Sei ArcadiaAI CES Plus, la versione avanzata del modello CES con capacità di ragionamento approfondito.\n"
+        "Prima di rispondere, analizza la domanda e mostra il tuo ragionamento passo-passo.\n"
+        "Formatta la risposta in questo modo:\n"
+        "[RAGIONAMENTO]\n"
+        "(qui il tuo ragionamento logico, passo dopo passo)\n"
+        "[RISPOSTA]\n"
+        "(qui la risposta finale, ben strutturata)\n"
+        "Mantieni un tono professionale ma amichevole."
+    )
+
+    try:
+        # Costruisci il messaggio completo con allegati
+        full_message = user_message if user_message else ""
+        if attachments:
+            for attachment in attachments:
+                if attachment.get('type') == 'application/pdf':
+                    try:
+                        if isinstance(attachment['data'], str) and attachment['data'].startswith('data:'):
+                            file_data = base64.b64decode(attachment['data'].split(',')[1])
+                        else:
+                            file_data = base64.b64decode(attachment['data'])
+                        extracted_text = extract_text_from_file(file_data, 'application/pdf')
+                        if extracted_text:
+                            full_message += f"\n[CONTENUTO PDF {attachment['name']}]:\n{extracted_text[:10000]}\n"
+                    except Exception as e:
+                        print(f"Errore elaborazione PDF: {str(e)}")
+                        full_message += f"\n[Errore nella lettura del PDF {attachment['name']}]"
+
+        # Prepara la cronologia della conversazione
+        contents = []
+        contents.append({'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]})
+
+        # Aggiungi la cronologia recente
+        for msg in conversation_history[-4:]:  # Manteniamo meno storia per focalizzarci sul ragionamento
+            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
+                role = msg['role'].lower()
+                if role == 'user':
+                    contents.append({'role': 'user', 'parts': [{'text': msg['message']}]})
+                elif role in ['assistant', 'model', 'bot']:
+                    contents.append({'role': 'model', 'parts': [{'text': msg['message']}]})
+
+        # Aggiungi il nuovo messaggio con eventuali allegati non PDF
+        new_message_parts = [{'text': full_message}] if full_message else []
+        if attachments:
+            for attachment in attachments:
+                mime_type = attachment.get('type', 'application/octet-stream')
+                file_name = attachment.get('name', 'file')
+                file_data = attachment['data']
+                if mime_type == 'application/pdf':
+                    continue
+                if isinstance(file_data, str) and file_data.startswith('data:'):
+                    file_data = file_data.split(',')[1]
+                if mime_type.startswith('image/'):
+                    new_message_parts.append({
+                        'inline_data': {
+                            'mime_type': mime_type,
+                            'data': file_data,
+                            'name': file_name
+                        }
+                    })
+                else:
+                    new_message_parts.append({
+                        'text': f"[Allegato: {file_name}]"
+                    })
+
+        contents.append({'role': 'user', 'parts': new_message_parts})
+
+        # Invia la richiesta a Gemini
+        response = gemini_model.generate_content(contents)
+        full_reply = response.text
+
+        # Separa il ragionamento dalla risposta finale
+        reasoning_part = ""
+        answer_part = full_reply
+        
+        if "[RAGIONAMENTO]" in full_reply and "[RISPOSTA]" in full_reply:
+            parts = full_reply.split("[RISPOSTA]")
+            reasoning_part = parts[0].replace("[RAGIONAMENTO]", "").strip()
+            answer_part = parts[1].strip()
+        elif "Ragionamento:" in full_reply:
+            parts = full_reply.split("Risposta:", 1)
+            reasoning_part = parts[0].replace("Ragionamento:", "").strip()
+            answer_part = parts[1].strip() if len(parts) > 1 else full_reply
+
+        # Costruisci la risposta strutturata
+        structured_response = []
+        if reasoning_part:
+            structured_response.append(f"🤔 [Ragionamento]:\n{reasoning_part}")
+        structured_response.append(f"💡 [Risposta]:\n{answer_part}")
+
+        return structured_response
+
+    except Exception as e:
+        print(f"Errore CES Plus: {str(e)}")
+        return ["❌ Si è verificato un errore con CES Plus. Riprova più tardi."]
+    except requests.exceptions.Timeout:
+        return "❌ Timeout del server, riprova più tardi"
+    except Exception as e:
+        print(f"Errore API Hugging Face: {str(e)}")
+        return f"❌ Errore temporaneo del servizio: {str(e)}"
+    
+def format_conversation_history(history):
+    """Formatta la cronologia della conversazione per il prompt"""
+    if not history:
+        return "Nessuna cronologia precedente"
+    
+    formatted = []
+    for msg in history[-6:]:  # Usa solo gli ultimi 6 messaggi per evitare prompt troppo lunghi
+        if isinstance(msg, dict):
+            role = "Utente" if msg.get("role") == "user" else "Assistente"
+            content = msg.get("message", "").strip()
+            if content:
+                formatted.append(f"{role}: {content}")
+    
+    return "\n".join(formatted) if formatted else "Nessuna cronologia rilevante"
+    
+def meteo_oggi(città):
+    """Ottiene le informazioni meteo per una città specifica usando OpenWeatherMap"""
+    API_KEY = OPENWEATHERMAP_API_KEY
+    if not API_KEY:
+        return "❌ Errore: API key per OpenWeatherMap non configurata"
+    
+    try:
+        # Codifica la città per l'URL
+        città_codificata = urllib.parse.quote(città)
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={città_codificata}&appid={API_KEY}&units=metric&lang=it"
+        
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        dati = response.json()
+        
+        if response.status_code != 200 or "weather" not in dati:
+            return f"❌ Impossibile ottenere il meteo per {città}. La città esiste?"
+        
+        descrizione = dati["weather"][0]["description"].capitalize()
+        temperatura = dati["main"]["temp"]
+        umidità = dati["main"]["humidity"]
+        vento = dati["wind"]["speed"]
+        
+        return (
+            f"⛅ Meteo a {città}:\n"
+            f"- Condizioni: {descrizione}\n"
+            f"- Temperatura: {temperatura}°C\n"
+            f"- Umidità: {umidità}%\n"
+            f"- Vento: {vento} m/s"
+        )
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Errore API meteo: {str(e)}")
+        return f"❌ Errore temporaneo nel servizio meteo. Riprova più tardi."
+    except Exception as e:
+        print(f"Errore generico meteo: {str(e)}")
+        return f"❌ Si è verificato un errore nel recupero del meteo per {città}."
+    
+    
+def parse_quick_command(input_text):
+    """
+    Analizza un comando rapido con prefisso @ e restituisce una tupla (comando, argomento).
+    Se non è un comando rapido, restituisce (None, None).
+    
+    Esempio:
+    >>> parse_quick_command("@cerca seconda guerra mondiale")
+    ('cerca', 'seconda guerra mondiale')
+    >>> parse_quick_command("ciao come stai?")
+    (None, None)
+    """
+    if not input_text.startswith("@"):
+        return None, None
+    
+    # Rimuovi il @ iniziale e dividi il resto in comando e argomento
+    parts = input_text[1:].split(" ", 1)  # Dividi al primo spazio
+    command = parts[0].lower().strip()
+    argument = parts[1].strip() if len(parts) > 1 else ""
+    
+    return command, argument
+
+def search_flathub_apps(query):
+    """Cerca app su Flathub e restituisce i risultati"""
+    url = f"https://flathub.org/api/v1/apps/search/{query}"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Errore ricerca Flathub: {str(e)}")
+        return None
+
+def get_flathub_app_details(app_id):
+    """Ottiene i dettagli di un'app da Flathub"""
+    url = f"https://flathub.org/api/v1/apps/{app_id}"
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Errore dettagli app Flathub: {str(e)}")
+        return None
+
+def get_flathub_download_link(app_id):
+    """Genera il link di download diretto per un'app Flathub"""
+    return f"https://dl.flathub.org/repo/appstream/{app_id}.flatpakref"
+
+def handle_flathub_command(command, argument):
+    """Gestisce i comandi relativi a Flathub"""
+    if command == "flathub":
+        if not argument:
+            return "❌ Specifica un'app da cercare su Flathub. Esempio: @flathub firefox"
+        
+        # Cerca l'app su Flathub
+        results = search_flathub_apps(argument)
+        if not results:
+            return f"❌ Nessun risultato trovato per '{argument}' su Flathub"
+        
+        # Prendi il primo risultato
+        app = results[0]
+        app_id = app.get("flatpakAppId")
+        app_name = app.get("name", "Sconosciuto")
+        
+        # Ottieni il link di download
+        download_link = get_flathub_download_link(app_id)
+        
+        return (
+            f"📦 {app_name} su Flathub:\n"
+            f"🔗 Download diretto: {download_link}\n"
+            f"ℹ️ Dettagli: https://flathub.org/apps/{app_id}"
+        )
+    
+    elif command == "flathub_download":
+        if not argument:
+            return "❌ Specifica l'ID dell'app da scaricare. Esempio: @flathub_download org.mozilla.firefox"
+        
+        # Verifica se l'app esiste
+        app_details = get_flathub_app_details(argument)
+        if not app_details:
+            return f"❌ App con ID '{argument}' non trovata su Flathub"
+        
+        # Genera il link di download
+        download_link = get_flathub_download_link(argument)
+        
+        return (
+            f"⬇️ Download diretto per {app_details.get('name', argument)}:\n"
+            f"{download_link}\n\n"
+            f"Per installare: flatpak install --from {download_link}"
+        )
+    
+    return None
+# --- Verifica disponibilità di Winget all'avvio (globale) ---
+_WINGET_AVAILABLE = False
+try:
+    subprocess.run(['winget', '--version'], capture_output=True, text=True, check=True)
+    _WINGET_AVAILABLE = True
+    print("Winget è disponibile sul sistema.")
+except (subprocess.CalledProcessError, FileNotFoundError):
+    print("ATTENZIONE: Winget non è disponibile. Le funzioni Winget potrebbero non funzionare.")
+
+# --- Verifica disponibilità di Winget all'avvio (globale) ---
+def search_windows_apps_online(query):
+    """
+    Cerca app Windows online usando una ricerca web per trovare link di download ufficiali.
+    """
+    search_term = f"{query} download ufficiale Windows"
+    results = search_duckduckgo(search_term) # Usa la tua funzione esistente per la ricerca web
+
+    if not results:
+        return []
+
+    # Filtra e prioritizza i risultati per trovare link di download ufficiali.
+    # Questa è una euristica e può essere migliorata per la tua specifica necessità.
+    filtered_urls = []
+    official_keywords = ["microsoft.com", "google.com", "mozilla.org", "videolan.org", "spotify.com", "7-zip.org"]
+    winget_web_interfaces = ["winget.run", "winstall.app"] # Siti che mostrano info Winget
+
+    for url in results:
+        # Priorità 1: Siti ufficiali di software molto noti o Winget web interfaces
+        if any(keyword in url.lower() for keyword in official_keywords + winget_web_interfaces):
+            filtered_urls.append(url)
+        # Priorità 2: Siti che includono "download" e "official" nel percorso, evitando aggregatori noti
+        elif "download" in url.lower() and not any(bad_domain in url for bad_domain in ["softonic.com", "filehippo.com", "updatestar.com"]):
+            filtered_urls.append(url)
+    
+    # Rimuovi duplicati mantenendo l'ordine originale
+    seen = set()
+    unique_filtered_urls = []
+    for url in filtered_urls:
+        if url not in seen:
+            unique_filtered_urls.append(url)
+            seen.add(url)
+
+    return unique_filtered_urls[:3] # Restituisce i primi 3 URL più rilevanti
+
+def get_windows_app_details_from_url(url, original_query):
+    """
+    Tenta di estrarre dettagli base da una URL di download per un'app Windows.
+    Questo è un approccio semplificato dato che non abbiamo i dati strutturati di Winget.
+    """
+    name = original_query.capitalize() # Nome predefinito capitalizzato dalla query
+    is_proprietary = True # Predefinito a proprietario, poi proviamo a indovinare
+    publisher = "Sconosciuto (verificare pagina)"
+
+    # Heuristiche basate su URL per nome e licenza
+    if "mozilla.org/firefox" in url.lower():
+        name = "Mozilla Firefox"
+        is_proprietary = False # Firefox è open source
+        publisher = "Mozilla"
+    elif "google.com/chrome" in url.lower():
+        name = "Google Chrome"
+        is_proprietary = True
+        publisher = "Google LLC"
+    elif "microsoft.com/edge" in url.lower():
+        name = "Microsoft Edge"
+        is_proprietary = True
+        publisher = "Microsoft Corporation"
+    elif "videolan.org/vlc" in url.lower():
+        name = "VLC Media Player"
+        is_proprietary = False
+        publisher = "VideoLAN"
+    elif "7-zip.org" in url.lower():
+        name = "7-Zip"
+        is_proprietary = False
+        publisher = "Igor Pavlov"
+    elif "spotify.com" in url.lower():
+        name = "Spotify"
+        is_proprietary = True
+        publisher = "Spotify AB"
+    elif "winget.run" in url.lower() or "winstall.app" in url.lower():
+        # Se è un'interfaccia Winget, proviamo a estrarre il nome dalla query
+        name = original_query.capitalize() + " (dal catalogo Winget)"
+        publisher = "Vari (dipende dall'app)"
+
+
+    return {
+        'name': name,
+        'homepage': url,          # L'URL di riferimento è la homepage/pagina di download
+        'installer_url': url,     # In questo contesto, è la stessa cosa
+        'is_proprietary': is_proprietary,
+        'publisher': publisher
+    }
+
+def handle_winget_command(command, argument):
+    """
+    Gestisce i comandi relativi alle app Windows tramite ricerca web.
+    """
+    if command == "winget":
+        if not argument:
+            return "❌ Specifica un'app Windows da cercare. Esempio: @winget firefox"
+        
+        # Ora cerchiamo online invece di eseguire winget localmente
+        download_urls = search_windows_apps_online(argument)
+
+        if not download_urls:
+            return (
+                f"❌ Non sono riuscito a trovare un link di download ufficiale per '{argument}' per Windows.\n"
+                "Potresti provare a cercare manualmente su Google o DuckDuckGo."
+            )
+        
+        # Prendo il primo risultato come il più rilevante
+        main_url = download_urls[0]
+        app_details = get_windows_app_details_from_url(main_url, argument) # Usa una funzione semplificata per estrarre i dettagli
+
+        name = app_details['name']
+        homepage = app_details['homepage']
+        is_proprietary = app_details['is_proprietary']
+        publisher = app_details['publisher']
+        
+        license_note = ""
+        if is_proprietary:
+            license_note = (
+                f"Nota: **{name}** è un software proprietario. "
+                f"La licenza d'uso è definita dall'editore ({publisher})."
+            )
+        else:
+            license_note = (
+                f"Nota: **{name}** è un software open source/gratuito. "
+                f"La licenza d'uso è definita dall'editore ({publisher})."
+            )
+
+        response = f"""
+📦 **{name}** per Windows:
+
+1.  **Scarica l'installer:**
+    Visita la pagina ufficiale per il download: {homepage}
+    *(Dovrai scaricare e installare l'app manualmente dal sito.)*
+
+ℹ️ Pagina ufficiale dell'app: {homepage}
+
+{license_note}
+        """
+        return response.strip()
+    
+    return None # Comando Winget non riconosciuto (es. se avessi altri sottocomandi)
+# --- Nuove Funzioni per Snap Store ---
+def search_snap_store_online(query):
+    """
+    Cerca app Snap online usando una ricerca web per trovare link ufficiali su snapcraft.io.
+    """
+    app.logger.info(f"Cercando app Snap online per: {query}")
+    search_term = f"{query} snapcraft.io"
+    results = search_duckduckgo(search_term)
+    return [url for url in results if "snapcraft.io" in url.lower()][:3]
+
+def get_snap_app_details_from_url(url, original_query):
+    """
+    Estrae dettagli base da una URL di Snapcraft per un'app Snap.
+    """
+    name = original_query.capitalize() + " (Snap)"
+    is_proprietary = "proprietary" in url.lower() # Semplice euristica per licenza
+    publisher = "Snapcraft Community / Canonical" # Default
+
+    # Migliora l'estrazione del nome e del publisher se possibile
+    if "snapcraft.io/store" not in url.lower():
+        try:
+            # Estrai il nome dal path dell'URL (es. snapcraft.io/firefox -> firefox)
+            name_from_url = url.split('/')[-1].replace('-', ' ').title()
+            if name_from_url and len(name_from_url) > 1: # Assicura che non sia vuoto o solo un carattere
+                name = name_from_url + " (Snap)"
+        except Exception as e:
+            app.logger.warning(f"Impossibile estrarre nome Snap da URL {url}: {e}")
+            
+    # Euristiche per alcune app comuni
+    if original_query.lower() == "spotify":
+        name = "Spotify (Snap)"
+        is_proprietary = True
+        publisher = "Spotify"
+    elif original_query.lower() == "vlc":
+        name = "VLC media player (Snap)"
+        is_proprietary = False
+        publisher = "VideoLAN"
+
+    return {
+        'name': name,
+        'homepage': url,
+        'installer_info': f"Installazione via Snap: `sudo snap install {original_query.lower()}`", # Comando di installazione Snap
+        'is_proprietary': is_proprietary,
+        'publisher': publisher,
+        'platform': 'Linux (Snap)'
+    }
+
+def handle_snap_command(argument):
+    """
+    Gestisce i comandi relativi alle app Snap.
+    """
+    if not argument:
+        return "❌ Specifica un'app Snap da cercare. Esempio: @snap spotify"
+    
+    download_urls = search_snap_store_online(argument)
+
+    if not download_urls:
+        return (
+            f"❌ Non sono riuscito a trovare un pacchetto Snap ufficiale per '{argument}'.\n"
+            "Potrebbe non esistere o il nome non è corretto. Prova a cercare su snapcraft.io."
+        )
+    
+    main_url = download_urls[0]
+    app_details = get_snap_app_details_from_url(main_url, argument)
+
+    name = app_details['name']
+    homepage = app_details['homepage']
+    installer_info = app_details['installer_info']
+    is_proprietary = app_details['is_proprietary']
+    publisher = app_details['publisher']
+    platform = app_details['platform']
+    
+    license_note = ""
+    if is_proprietary:
+        license_note = (
+            f"Nota: **{name}** è un software proprietario. "
+            f"La licenza d'uso è definita dall'editore ({publisher})."
+        )
+    else:
+        license_note = (
+            f"Nota: **{name}** è un software open source/gratuito. "
+            f"La licenza d'uso è definita dall'editore ({publisher})."
+        )
+
+    response = f"""
+📦 **{name}** per {platform}:
+
+1.  **Pagina ufficiale:** {homepage}
+2.  **Installazione:** `{installer_info}`
+    *(Apri il terminale sul tuo sistema Linux e incolla il comando.)*
+
+{license_note}
+    """
+    return response.strip()
+
+
+def search_fdroid_online(query):
+    """
+    Cerca app F-Droid online usando una ricerca web per trovare link ufficiali su f-droid.org.
+    """
+    app.logger.info(f"Cercando app F-Droid online per: {query}")
+    search_term = f"{query} f-droid.org"
+    results = search_duckduckgo(search_term)
+    # Filtra per URL che sembrano pagine di pacchetto F-Droid (es. /packages/nome.app/)
+    return [url for url in results if "f-droid.org/packages/" in url.lower()][:3]
+
+def get_fdroid_app_details_from_url(url, original_query):
+    """
+    Estrae dettagli base da una URL di F-Droid per un'app Android.
+    """
+    name = original_query.capitalize() + " (F-Droid)"
+    is_proprietary = False # Le app su F-Droid sono sempre open source
+    publisher = "F-Droid Community / Sviluppatore originale" # Default
+
+    try:
+        # Estrai il nome del pacchetto dall'URL per un nome più preciso
+        match = re.search(r"f-droid\.org/packages/([a-zA-Z0-9\._-]+)/", url)
+        if match:
+            package_id = match.group(1)
+            # Tenta di pulire il nome del pacchetto per renderlo più leggibile
+            cleaned_name = package_id.split('.')[-1].replace('_', ' ').title()
+            if cleaned_name:
+                name = cleaned_name + " (F-Droid)"
+    except Exception as e:
+        app.logger.warning(f"Impossibile estrarre nome F-Droid da URL {url}: {e}")
+
+    # Euristiche per alcune app comuni
+    if original_query.lower() == "newpipe":
+        name = "NewPipe (F-Droid)"
+        publisher = "Team NewPipe"
+    elif original_query.lower() == "signal":
+        name = "Signal (F-Droid)"
+        publisher = "Signal Messenger, LLC"
+
+    return {
+        'name': name,
+        'homepage': url,
+        'installer_info': f"Scarica direttamente da F-Droid.org o tramite l'app F-Droid.",
+        'is_proprietary': is_proprietary, # Sempre False per F-Droid
+        'publisher': publisher,
+        'platform': 'Android (F-Droid)'
+    }
+
+def handle_fdroid_command(argument):
+    """
+    Gestisce i comandi relativi alle app F-Droid.
+    """
+    try: # Aggiunto try-except
+        if not argument:
+            return "❌ Specifica un'app F-Droid da cercare. Esempio: @fdroid newpipe"
+        
+        download_urls = search_fdroid_online(argument)
+
+        if not download_urls:
+            return (
+                f"❌ Non sono riuscito a trovare un'app ufficiale per '{argument}' su F-Droid.\n"
+                "Potrebbe non esistere o il nome non è corretto. Prova a cercare su f-droid.org."
+            )
+        
+        main_url = download_urls[0]
+        app_details = get_fdroid_app_details_from_url(main_url, argument)
+
+        name = app_details['name']
+        homepage = app_details['homepage']
+        installer_info = app_details['installer_info']
+        is_proprietary = app_details['is_proprietary']
+        publisher = app_details['publisher']
+        platform = app_details['platform']
+        
+        license_note = (
+            f"Nota: **{name}** è un software open source/gratuito. "
+            f"La licenza d'uso è definita dall'editore ({publisher})."
+        )
+
+        response = f"""
+📦 **{name}** per {platform}:
+
+1.  **Pagina ufficiale:** {homepage}
+2.  **Installazione:** {installer_info}
+    *(Dovrai scaricare e installare l'app manualmente sul tuo dispositivo Android o usare l'app F-Droid.)*
+
+{license_note}
+        """
+        return response.strip()
+    except Exception as e:
+        app.logger.error(f"Errore nella gestione del comando F-Droid per '{argument}': {str(e)}")
+        return f"❌ Si è verificato un errore interno durante l'elaborazione del comando F-Droid. Controlla i log del server per maggiori dettagli."
+
+# --- Funzione principale della tua IA che elabora l'input dell'utente ---
+def process_user_input(user_input):
+    """
+    Funzione principale della tua IA che elabora l'input dell'utente.
+    """
+    if user_input.lower() == "@app":
+        return """
+Repository per Download Manager:
+- @Flathub - [Nome-App] (per Linux)
+- @Winget - [Nome-App] (per Windows)
+- @Snap - [Nome-App] (per Linux)
+- @F-Droid - [Nome-App] (per Android)
+(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)
+"""
+ 
+    elif user_input.lower().startswith("@winget"): # Usiamo direttamente user_input.lower()
+        parts = user_input.lower().split(" ", 1)
+        argument = parts[1].strip() if len(parts) > 1 else ""
+        return handle_winget_command("winget", argument)
+    
+    elif user_input.lower().startswith("@snap"): # Usiamo direttamente user_input.lower()
+        parts = user_input.lower().split(" ", 1)
+        argument = parts[1].strip() if len(parts) > 1 else ""
+        return handle_snap_command(argument)
+    
+    elif user_input.lower().startswith("@fdroid"): # Usiamo direttamente user_input.lower()
+        parts = user_input.lower().split(" ", 1)
+        argument = parts[1].strip() if len(parts) > 1 else ""
+        return handle_fdroid_command(argument)
+    
+    elif user_input.lower().startswith("@flathub"): # Usiamo direttamente user_input.lower()
+        parts = user_input.lower().split(" ", 1)
+        argument = parts[1].strip() if len(parts) > 1 else ""
+        return handle_flathub_command(argument)
+    
+    else:
+        return "Comando non riconosciuto. Prova '@app' per vedere i repository disponibili."
+
+
+from flask import session
+import requests
+import json
+
+
+def handle_quick_commands(message, experimental_mode=False):
+    """
+    Gestisce i comandi rapidi di ArcadiaAI (inclusi quelli per Flathub e Winget).
+    """
+    msg_lower = message.strip().lower()
+    command, argument = parse_quick_command(message)
+    if command is None:
+        return None
+
+    # --- Gestione comandi Flathub ---
+    flathub_response = handle_flathub_command(command, argument)
+    if flathub_response:
+        return flathub_response
+
+    # --- NUOVO: Gestione comandi Winget ---
+    winget_response = handle_winget_command(command, argument)
+    if winget_response:
+        return winget_response
+
+    # --- Estensioni NSK ---
+    for ext in EXTENSIONS.values():
+        try:
+            if ext.can_handle(command):
+                return ext.handle(argument)
+        except Exception as e:
+            return f"❌ Errore nell'estensione: {e}"
+
+    if msg_lower == "@impostazioni modalità sperimentale disattiva":
+        return "❎ Modalità sperimentale disattivata!"
+
+    if msg_lower == "@impostazioni modalità sperimentale attiva":
+        return "✅ Modalità sperimentale attivata!"
+
+    if command == "cerca":
+        if not argument:
+            return "❌ Devi specificare cosa cercare. Esempio: @cerca seconda guerra mondiale"
+
+        results = search_duckduckgo(argument)
+        if not results or not isinstance(results, list):
+            return f"❌ Nessun risultato trovato per '{argument}'"
+
+        # Estrai solo le URL vere dai risultati
+        urls = [
+            r['url'] for r in results
+            if isinstance(r, dict) and 'url' in r
+        ]
+
+        urls = [
+            url for url in urls
+            if "duckduckgo.com/y.js" not in url and "ad_domain" not in url
+        ]
+
+        if urls:
+            testo = estrai_testo_da_url(urls[0])
+            if testo:
+                breve = ". ".join(testo.split(".")[:2]).strip() + "."
+                return (
+                    f"🔍 Risultati per '{argument}':\n\n"
+                    f"**Sintesi dal primo risultato:**\n{breve}\n\n"
+                    + "\n".join(f"- {url}" for url in urls[:3])
+                )
+            else:
+                return (
+                    f"🔍 Risultati per '{argument}':\n\n"
+                    + "\n".join(f"- {url}" for url in urls[:3])
+                )
+
+        return f"❌ Nessun risultato trovato per '{argument}'"
+
+    if command == "estensioni":
+        if not EXTENSIONS:
+            return "🔌 Nessuna estensione installata."
+        elenco = "\n".join(
+            f"- {getattr(mod, '__name__', name).replace('nsk_', '')}"
+            for name, mod in EXTENSIONS.items()
+        )
+        return f"🔌 Estensioni installate:\n{elenco}"
+
+    elif command == "versione":
+        return "🔄 Versione attuale: 1.5.6"
+
+    elif command == "telegraph" and argument:
+        if "saggio" in argument or "scrivi" in argument:
+            prompt = argument
+            if gemini_model:
+                generated_text, telegraph_url = generate_with_gemini(prompt, "Articolo generato da ArcadiaAI")
+            else:
+                generated_text = chat_with_huggingface(prompt, [])
+                telegraph_url = publish_to_telegraph("Articolo generato da ArcadiaAI", generated_text)
+            if telegraph_url and not telegraph_url.startswith("⚠️"):
+                return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
+            return telegraph_url or "❌ Errore nella pubblicazione"
+        else:
+            telegraph_url = publish_to_telegraph("Articolo generato da ArcadiaAI", argument)
+            return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
+
+    elif command == "meteo" and argument:
+        return meteo_oggi(argument)
+
+    elif command == "data":
+        import locale
+        import datetime
+        locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
+        oggi = datetime.datetime.now().strftime("%A %d %B %Y")
+        return f"📅 Oggi è {oggi}"
+
+    elif command == "source":
+        return "🔗 Repository GitHub: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI "
+
+    elif command == "arcadia":
+        return "🔗 Profilo della Repubblica di Arcadia: https://t.me/Repubblica_Arcadia"
+
+    elif command == "@impostazioni lingua italiano":
+        return "🇮🇹 Lingua cambiata in italiano!"
+
+    elif command == "@impostazioni lingua inglese":
+        return "🇬🇧 Lingua cambiata in inglese!"
+
+    elif command == "app":
+        return (
+            "Repository per download manager:\n"
+            "- @flathub - [nome-app]: scarica un'app per Linux(flatpak)\n"
+            "- @winget - [nome-app]: scarica un'app per Windows\n"
+            "- @snap - [nome-app]: scarica un'app per Linux (Snapd)\n"
+            "- @fdroid - [nome-app]: scarica un'app per Android (F-Droid)\n"
+            "(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. "
+            "Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)"
+        )
+
+    elif command == "snap":
+        if not argument:
+            return "❌ Specifica un'app Snap da cercare. Esempio: @snap firefox"
+        return handle_snap_command(argument)
+
+    elif command == "fdroid":
+        if not argument:
+            return "❌ Specifica un'app F-Droid da cercare. Esempio: @fdroid newpipe"
+        return handle_fdroid_command(argument)
+
+    elif command == "tos":
+        return "📜 Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
+
+    elif command == "codice_sorgente":
+        return "🔗 Codice sorgente di ArcadiaAI: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI"
+
+    elif command == "info":
+        return (
+            "ℹ️ Informazioni su ArcadiaAI:\n\n"
+            "Versione: 1.5.0\n"
+            "Modello: CES basato su Google Gemini e Huggingface\n"
+            "Lingua: Italiano e inglese (beta)\n"
+            "Creatore: Mirko Yuri Donato\n"
+            "Licenza: GNU GPL v3.0+\n"
+            "Repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI\n"
+            "Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
+        )
+
+    elif command == "crea" and argument.lower().startswith("zip"):
+        return "Per creare uno ZIP allega i file e usa il comando dalla chat. Il file ZIP verrà generato dal frontend."
+
+    elif command == "impostazioni":
+        return (
+            "⚙️ Menu Impostazioni :\n\n"
+            "- Modalità Sperimentale: attiva/disattiva\n"
+            "- Lingua: italiano/inglese\n"
+            "- Tema: chiaro/scuro\n"
+            "- Modalità Sviluppatore: attiva/disattiva\n"
+            "Usa i comandi @impostazioni [opzione] per modificare le impostazioni."
+            "Nota: Alcune opzioni potrebbero non essere disponibili in questa versione."
+        )
+
+    elif command == "immagine":
+        if not argument:
+            return "❌ Specifica cosa disegnare. Esempio: @immagine drago pixel art su un hoverboard"
+
+        try:
+            response = requests.post(
+                "https://arcadiaai.onrender.com/api/ces-image",
+                headers={"Content-Type": "application/json"},
+                json={"prompt": argument},
+                timeout=20
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                image_url = data.get("image_url")
+                if image_url:
+                    return (
+                        f'<div style="text-align: center;">'
+                        f'<img src="{image_url}" alt="{argument}" '
+                        f'style="max-width: 512px; width: 100%; height: auto; '
+                        f'margin-top: 8px; border-radius: 6px;">'
+                        f'</div>'
+                    )
+                return "⚠️ L’API ha risposto ma non ha fornito nessuna immagine."
+            return f"❌ Errore dall’API CES Image: {response.status_code}"
+
+        except Exception as e:
+            return f"❌ Errore nella generazione dell’immagine: {e}"
+
+    elif command == "privacy":
+        return (
+            "🔒 Privacy Policy:\n\n"
+            "I tuoi dati non vengono memorizzati o condivisi. "
+            "Le conversazioni sono salvate in locale. "
+            "Per maggiori dettagli, consulta i Termini di Servizio."
+        )
+    elif command == "sac":
+        return (
+            "🔗 SAC (Strumenti Avanzati di CES):\n\n"
+            "I SAC sono componenti interne del codice sorgente di ArcadiaAI che p. "
+            "Puoi esportare, importare e cancellare le conversazioni tramite i comandi dedicati."
+        )
+    elif command == "cancella_conversazione":
+        return "🗑️ Cronologia della conversazione"
+    elif command == "aiuto": # Questo blocco è ora il comando generico @aiuto
+        return (
+            "🎯 Comandi rapidi disponibili:\n\n"
+            "@cerca [query] - Cerca su internet\n"
+            "@telegraph [testo] - Pubblica su Telegraph\n"
+            "@meteo [luogo] - Ottieni il meteo\n"
+            "@data - Mostra la data di oggi\n"
+            "@aiuto - Mostra questa guida\n"
+            "@impostazioni modalità sperimentale disattiva - Disattiva la modalità sperimentale\n"
+            "@impostazioni - apre il menu delle impostazioni\n"
+            "@impostazioni lingua [nome lingua] - Cambia lingua\n"
+            "@impostazioni tema [chiaro|scuro] - Cambia tema\n"
+            "@impostazioni modalità sviluppatore attiva - Attiva la modalità sviluppatore\n"
+            "@ToS - Mostra i Termini di Servizio\n"
+            "@Arcadia - Mostra il profilo della Repubblica di Arcadia\n"
+            "@info - Mostra informazioni su ArcadiaAI\n"
+            "@impostazioni modalità sperimentale attiva - Attiva la modalità sperimentale"
+            "@codice_sorgente - Mostra il codice sorgente di ArcadiaAI\n"
+            "@impostazioni - Mostra il menu delle impostazioni\n"
+            "@estensioni - Mostra le estensioni installate\n"
+            "@estensioni [nome estensione] - Mostra informazioni su un'estensione\n"
+            "@privacy - Mostra la privacy policy\n"
+            "@app - Mostra le repository che supportano il Download Manager\n"
+            "@flathub [nome app] - Cerca un'app su Flathub e restituisce il download diretto\n"
+            "@flathub_download [ID app] - Scarica un'app specifica da Flathub\n"
+            "@winget [nome app] - Cerca un'app su Winget e restituisce il download diretto (NOVITÀ!)\n" # Aggiunto qui
+            "@cesplus - Usa il modello CES Plus per risposte avanzate\n"
+            "@crea zip - genera un file ZIP con file dati dall'utente\n"
+            "@esporta - Esporta l'ultima conversazione in un file TXT\n"
+            "@importa - Importa la una conversazione da un file TXT tramite NovaSync\n"
+            "Per altre domande, chiedi pure!"
+        )
+
+    # Se nessun comando è riconosciuto
+    return f"❌ Comando '{command}' non riconosciuto. Scrivi '@aiuto' per la lista dei comandi."
+    
+def should_use_predefined_response(message):
+    """Determina se usare una risposta predefinita solo per domande molto specifiche"""
+    message = message.lower().strip()
+    exact_matches = [
+        "chi sei esattamente",
+        "qual è la tua identità precisa",
+        "elencami tutte le tue funzioni",
+        # ... altre domande esatte
+    ]
+    return any(exact_match in message for exact_match in exact_matches)
+nest_asyncio.apply()
+
+# === Memoria contestuale per utente ===
+user_histories = {}  # user_id: [messaggi]
+user_models = {}     # user_id: modello selezionato
+
+# === HANDLER MESSAGGI TELEGRAM ===
+async def telegram_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message.text
+    chat_id = update.message.chat.id
+    user_id = update.effective_user.id
+
+    # Recupera o inizializza la cronologia
+    history = user_histories.get(user_id, [])
+    history.append({"role": "user", "message": message})
+
+    # Recupera il modello selezionato o usa "gemini" come default
+    modello = user_models.get(user_id, "gemini")
+
+    data = {
+        "message": message,
+        "conversation_history": history,
+        "api_provider": modello
+    }
+
+    try:
+        response = requests.post("https://arcadiaai.onrender.com/chat", json=data, timeout=60)
+        reply = response.json().get("reply", "❌ Nessuna risposta generata.")
+    except Exception as e:
+        reply = f"❌ Errore: {e}"
+
+    # Salva la risposta nella cronologia
+    history.append({"role": "assistant", "message": reply})
+    user_histories[user_id] = history[-2000:]  # Mantieni solo gli ultimi 20 messaggi
+
+    await context.bot.send_message(chat_id=chat_id, text=reply)
+
+# === COMANDO /start ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 Benvenuto su ArcadiaAI!\nUsa /modello per scegliere il modello AI.")
+
+# === COMANDO /reset ===
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_histories[user_id] = []
+    await update.message.reply_text("🧠 Memoria contestuale resettata.")
+
+# === COMANDO /modello ===
+async def scegli_modello(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [
+            InlineKeyboardButton("CES 1.5", callback_data="gemini"),
+            InlineKeyboardButton("CES Plus", callback_data="cesplus"),
+        ],
+        [
+            InlineKeyboardButton("DeepSeek R1", callback_data="deepseek"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🤖 Scegli il modello AI da usare:", reply_markup=reply_markup)
+
+# === CALLBACK: selezione modello ===
+async def handle_model_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = query.from_user.id
+    modello = query.data.replace("modello_", "")
+
+    nomi_modelli = {
+        "gemini": "CES 1.5",
+        "cesplus": "CES Plus",
+        "deepseek": "DeepSeek R1"
+    }
+
+    user_models[user_id] = modello
+    nome_modello = nomi_modelli.get(modello, "Modello sconosciuto")
+
+    await query.edit_message_text(f"✅ Hai selezionato il modello: *{nome_modello}*", parse_mode="Markdown")
+
+# === AVVIO FLASK ===
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🌐 Avvio server Flask sulla porta {port}...")
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+# === AVVIO TELEGRAM BOT ===
+async def run_telegram_bot():
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("reset", reset))
+    application.add_handler(CommandHandler("modello", scegli_modello))
+    application.add_handler(CallbackQueryHandler(handle_model_selection))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, telegram_message_handler))
+
+    print("🤖 Bot Telegram avviato!")
+    await application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        stop_signals=None,
+        close_loop=False
+    )
+
+# === AVVIO PARALLELO ===
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    asyncio.run(run_telegram_bot())
