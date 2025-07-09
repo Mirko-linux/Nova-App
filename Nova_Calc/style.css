@@ -1,0 +1,117 @@
+/* style.css */
+
+/* Stili Globali e Body */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; /* Occupazione dell'intera altezza della viewport */
+  background: linear-gradient(to right, #6dd5ed, #2193b0); /* Sfondo sfumato azzurro */
+  margin: 0; /* Rimuove i margini predefiniti del body */
+  overflow: hidden; /* Evita scrollbar indesiderate */
+}
+
+/* Stili della Calcolatrice Principale */
+.calcolatrice {
+  background: rgba(255, 255, 255, 0.95); /* Sfondo bianco semi-trasparente */
+  padding: 25px; /* Padding interno */
+  border-radius: 20px; /* Bordi arrotondati */
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3); /* Ombra pronunciata */
+  width: 380px; /* Larghezza fissa */
+  box-sizing: border-box; /* Include padding e bordo nella larghezza/altezza */
+}
+
+/* Stili del Titolo */
+h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333; /* Colore del testo scuro */
+  font-size: 1.8em; /* Dimensione del font */
+}
+
+/* Stili del Display (Input) */
+#display {
+  width: calc(100% - 20px); /* 100% meno il padding orizzontale */
+  height: 60px;
+  font-size: 2.2em;
+  text-align: right; /* Testo allineato a destra */
+  margin-bottom: 20px;
+  padding: 10px;
+  border: 1px solid #ccc; /* Bordo sottile grigio */
+  border-radius: 12px;
+  box-sizing: border-box;
+  background: #fdfdfd; /* Sfondo quasi bianco */
+  color: #333;
+}
+
+/* Stili della Griglia dei Tasti */
+.tasti {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 colonne di larghezza uguale */
+  gap: 12px; /* Spazio tra i bottoni */
+}
+
+/* Stili Generici dei Bottoni */
+button {
+  padding: 18px;
+  font-size: 1.4em;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  background: #e9e9e9; /* Sfondo grigio chiaro */
+  transition: all 0.2s ease-in-out; /* Transizione per effetti hover/active */
+  outline: none; /* Rimuove l'outline al focus */
+}
+
+/* Effetto di Click sui Bottoni */
+button:active {
+    transform: translateY(1px); /* Sposta il bottone leggermente in basso */
+}
+
+/* Stili per i Bottoni Numerici */
+.numeri:hover {
+    background: #d8d8d8; /* Sfondo leggermente più scuro al hover */
+}
+
+/* Stili per il Bottone Uguale */
+.uguale {
+  background: #4CAF50; /* Verde */
+  color: white;
+  grid-column: span 2; /* Occupa 2 colonne */
+}
+.uguale:hover {
+  background: #45a049;
+  transform: scale(1.02); /* Leggero ingrandimento al hover */
+}
+
+/* Stili per i Bottoni Operatori (+, -, *, /, (, ), x, ^) */
+.operatore {
+  background: #FF9800; /* Arancione */
+  color: white;
+}
+.operatore:hover {
+    background: #e68900;
+    transform: scale(1.02);
+}
+
+/* Stili per i Bottoni Funzione (AC, Freccia Indietro) */
+.funzione {
+  background: #F44336; /* Rosso */
+  color: white;
+}
+.funzione:hover {
+    background: #d32f2f;
+    transform: scale(1.02);
+}
+
+/* Stili per il Bottone "Risolvi Eq." */
+.risolvi-eq-btn {
+    background: #2196F3; /* Blu */
+    color: white;
+    grid-column: span 2; /* Occupa 2 colonne */
+}
+.risolvi-eq-btn:hover {
+    background: #1976D2;
+    transform: scale(1.02);
+}
