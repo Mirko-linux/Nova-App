@@ -3,10 +3,10 @@
 </p>
 
 <h1 align="center">ArcadiaAI</h1>
-<p align="center"><em>l'IA democratica e libera per tutti</p>
+<p align="center"><em>L'IA democratica e libera per tutti</em></p>
 
 **ArcadiaAI** è una piattaforma modulare per l’intelligenza artificiale conversazionale, progettata per essere libera, accessibile e sovrana.
-Fondata da [Mirko Donato](https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI), ArcadiaAI unisce modelli principalmente open-source, interfacce leggere e backend distribuiti per offrire esperienze AI potenti e gratuite.
+Fondata da [Mirko Donato](https://github.com/Mirko-linux), ArcadiaAI unisce modelli principalmente open-source, interfacce leggere e backend distribuiti per offrire esperienze AI potenti e gratuite.
 
 ---
 
@@ -44,7 +44,7 @@ Benvenuto in ArcadiaAI! Sei pronto a esplorare il futuro dell'intelligenza artif
 
 Per un'esperienza immediata, puoi accedere ad ArcadiaAI direttamente tramite il tuo browser. Non è necessario installare nulla:
 
-1.  **Visita il nostro sito web:** [Link al tuo sito web/applicazione qui]
+1.  **Visita il nostro sito web:** [qui](https://arcadiaai.netlify.app/)
 2.  **Scegli il tuo modello preferito:** Seleziona tra i nostri moduli disponibili, come **CES 1.5** per un'esperienza generale o **CES 360** per interazioni più avanzate.
 3.  **Inizia a chattare!** Digita le tue domande o richieste e scopri la potenza di ArcadiaAI.
 
