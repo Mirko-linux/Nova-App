@@ -1,0 +1,68 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  python-tests-and-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Python tests
+      working-directory: sr/
+      run: |
+        python -m unittest discover -s ./tests
+
+
+    - name: Run Python linter (Flake8)
+      working-directory: sr/
+      run: |
+        pip install flake8
+        flake8 . --count --show-source --statistics
+
+  javascript-and-html-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install JavaScript dependencies
+      working-directory: Sito web/
+      run: |
+        npm install
+
+    - name: Run JavaScript tests
+      working-directory: Sito web/
+      run: npm test
+
+    - name: Run JavaScript linter (ESLint)
+      working-directory: Sito web/
+      run: npx eslint .
+
+    - name: Check HTML syntax (HTMLHint, if configured)
+      working-directory: Sito web/
+      run: |
+        # Esegui il tuo comando per il linting HTML qui
