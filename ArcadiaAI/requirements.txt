@@ -1,0 +1,12 @@
+python-telegram-bot
+sympy
+Flask
+Flask-cors
+requests
+python-dotenv
+openpyxl
+beautifulsoup4
+fuzzywuzzy
+pypdf2
+google-generativeai
+gunicorn
