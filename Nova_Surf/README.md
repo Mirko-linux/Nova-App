@@ -23,13 +23,13 @@ Ciò significa che:
 - Il codice sorgente è completamente libero
 - Può essere modificato e redistribuito secondo i termini della licenza GPL
 
-> Alcuni componenti integrati, come i [Mini Tool](https://github.com/tuo-user/mini-tool), sono originariamente concessi con licenza MIT. Quando inclusi nel browser, l'intero progetto rientra sotto GPL v3.0.
+> Alcuni componenti integrati, come i [Mini Tool]](https://github.com/Mirko-linux/Nova-App/tree/main/Mini%20tool)), sono originariamente concessi con licenza MIT. Quando inclusi nel browser, l'intero progetto rientra sotto GPL v3.0.
 
 ---
 
 ## 📦 Installazione
 
 ```bash
-git clone https://github.com/tuo-user/NovaSurf.git
+git clone (https://github.com/Mirko-linux/Nova-App/tree/main/Nova_Surf.git
 cd NovaSurf
 python main.py
