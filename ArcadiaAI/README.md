@@ -103,7 +103,7 @@ Per poter lavorare efficacemente sul codice, assicurati di avere familiarità co
     Naviga alla pagina GitHub di [ArcadiaAI](https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI) e clicca sul pulsante "**Fork**" in alto a destra. Questo creerà una copia del repository sul tuo account GitHub.
 
 2.  **Clona il Tuo Fork Localmente:**
-    Dal tuo terminale, clona la tua copia del repository. Sostituisci `[il-tuo-username]` con il tuo username GitHub:
+    Dal tuo terminale, clona la tua copia del repository.
 
     ```bash
     git clone https://github.com/Mirko-linux/Nova-App.git
