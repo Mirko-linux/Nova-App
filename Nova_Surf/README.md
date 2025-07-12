@@ -32,4 +32,4 @@ Ciò significa che:
 ```bash
 git clone (https://github.com/Mirko-linux/Nova-App/tree/main/Nova_Surf.git
 cd NovaSurf
-python main.py
+python browser.py
