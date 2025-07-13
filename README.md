@@ -1,4 +1,5 @@
 # Nova-App 
+
 [![Python 3.x](https://img.shields.io/badge/Python-3.x-blue.svg)](https://python.org)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
