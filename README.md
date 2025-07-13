@@ -14,6 +14,6 @@ L'intero progetto è mantenuto è sviluppato in Italia da Mirko Yuri Donato, com
 - **Nova Pocket**: Progetto ancora in fase di sviluppo 
 - **Mini Tool**: componenti leggeri per progetti in python
 
-  ## Nova Surf
-  Nova Surf è un browser molto leggero scritto in Python, mediante l'uso delle librerie PyQt e PyQtWebEngine.
-  Esso nasce dall'idea di unire il design e la comodità di *Mozilla Firefox* alla compatibilità e la versatilità di *Google Chrome*.
+## Nova Surf
+Nova Surf è un browser molto leggero scritto in Python, mediante l'uso delle librerie PyQt e PyQtWebEngine.
+Esso nasce dall'idea di unire il design e la comodità di *Mozilla Firefox* alla compatibilità e la versatilità di *Google Chrome*.
