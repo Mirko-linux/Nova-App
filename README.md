@@ -1,42 +1,19 @@
-# Nova-Surf  
-## ❓ Domande Frequenti (FAQ)  
+# Nova-App 
+[![Python 3.x](https://img.shields.io/badge/Python-3.x-blue.svg)](https://python.org)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-### Cos'è Nova Surf?  
-Nova Surf è un browser web **libero e open-source**, parte del progetto *Repubblica di Arcadia*. È un’alternativa made in Italy agli altri browser, sviluppata interamente in **Python, PyQt5 e PyQtWebEngine** da **Mirko Yuri Donato**.  
+Nova App è una raccolta di applicazioni sviluppate in Python, pensate per offrire strumenti essenziali e potenti. Ogni app ha un proprio scopo e un README dedicato con tutti i dettagli.
+L'intero progetto è mantenuto è sviluppato in Italia da Mirko Yuri Donato, come parte del progetto  [*Repubblica di Arcadia*](https://repubblicadiarcadia.it/).
 
-### Come posso installare Nova Surf?  
-Puoi scaricare Nova Surf dalla sezione Realease. Al momento, il download è **esclusivo per distribuzioni GNU/Linux** compatibili con il pacchetto `.deb`.  
 
-### Come installo Nova Surf su Windows?  
-Nova Surf non è ancora disponibile per Windows, ma puoi avviarlo dal codice sorgente (`Browser.py`).  
-📌 **Requisiti**:  
-- **Python3**  
-- **PyQt5**  
-- **PyQtWebEngine**  
+## Le nostre App:
+- **Nova Surf**: browser web scritto in PyQt5
+- **Nova QuickNote**: editor di testo minimalista
+- **ArcadiaAI**: chatbot AI basato su vari LLM
+- **Nova Calc**: calcolatrice avanzata
+- **Nova Pocket**: Progetto ancora in fase di sviluppo 
+- **Mini Tool**: componenti leggeri per progetti in python
 
-⚠️ **Nota**: Avviare il browser da terminale Python potrebbe comprometterne l’uso.  
-
-### Posso contribuire al progetto Nova Surf?  
-Assolutamente! Nova Surf è aperto a tutti. Vuoi contribuire?  
-- Entra nel canale telegram di Arcadia (https://t.me/Repubblica_Arcadia) e visita l'apposito forum (Forum Cibernetico)
-- Iscriviti a Leonia+ per seguire gli ultimi aggornamenti sulla piattaforma
-
-### Cos'è Leonia+?  
-**Leonia+** è un canale Telegram integrato nel browser. Accedi ad esso tramite l’estensione **"Servizi Leonia+"**, che include tutti i canali del giornale.  
-
-### Cosa significano "Disponibile", "Specializzante" e "Semi-specializzante"?  
-I servizi di **Leonia+** si suddividono in tre categorie:  
-- **Servizi Disponibili** → Accessibili interamente **sia su Telegram che sul browser**.  
-- **Servizi Semi-specializzanti** → Presenti su entrambe le piattaforme, ma con funzionalità aggiuntive su una delle due.  
-- **Servizi Specializzanti** → **Esclusivi di una piattaforma** (es. *Leonia+ Notizie* e *NovaHub*, disponibili solo su browser).
-
-### Cos'è il formato .nsk?
-Il formato .nsk (Nova Surf Package) è un'estensione proprietaria usata per eseguire gli add-on, simile aL .crx di Chrome. E' inoltre possibile importare anche altre estesioni al di fuori del browser, purché esse siano in formato .nsk 
-
-### Cos'è ArcadiaAI
-ArcadiaAI è il chatbot ufficiale di Nova Surf, basato sull’API LLaMA2. È progettato per offrire un’esperienza interattiva avanzata, con diverse funzionalità tra cui:
-- Ricerca su Internet: 
-
-### Cos'è Nova QuickNote?
-Nova QuickNote è un editor di testo libero e opensource disponibili sia insieme al browser sia come applicazione, utile per prendere appunti, scrivere ed eseguire codici comandi e per 
-lavorare è collegato anche ad internet, supporta ArcadiaAI e puoi attivare il salvataggio automatico o in cloud (Google Drive, Dropbox o Onedrive...) o in locale ed esportare in .odt, in .pdf e in .txt 
+  ## Nova Surf
+  Nova Surf è un browser molto leggero scritto in Python, mediante l'uso delle librerie PyQt e PyQtWebEngine.
+  Esso nasce dall'idea di unire il design e la comodità di *Mozilla Firefox* alla compatibilità e la versatilità di *Google Chrome*.
