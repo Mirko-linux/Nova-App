@@ -5,6 +5,8 @@
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 ![Made in Italy 🇮🇹](https://img.shields.io/badge/Made%20in%20Italy-green.svg)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-@ArcadiaAI_chatbot-blue?logo=telegram)](https://t.me/ArcadiaAI_chatbot)
+[![Google Gemini](https://img.shields.io/badge/Gemini-componenti_proprietarie-important)](https://ai.google/discover/gemini/)
 
 <h1 align="center">ArcadiaAI</h1>
 <p align="center"><em>L'IA democratica e libera per tutti</em></p>
