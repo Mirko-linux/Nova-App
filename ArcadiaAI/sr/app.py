@@ -1166,6 +1166,7 @@ def chat_with_deepseek(message, conversation_history=None, attachments=None):
         print(f"[ERRORE] DeepSeek API: {str(e)}")
         return "❌ Errore temporaneo con DeepSeek. Prova a cambiare provider o riprova più tardi."
 
+
 def chat_with_gemini(user_message, conversation_history, attachments=None):
     if not gemini_model:
         return "❌ ArcadiaAI (CES 1.5) non è disponibile."
@@ -1174,25 +1175,25 @@ def chat_with_gemini(user_message, conversation_history, attachments=None):
     IDENTITY_PROMPT = """Sei ArcadiaAI, sistema AI open-source creato da Mirko Yuri Donato.
     
 Identità:
-- Modello: CES 1.5 (basato su tecnologia avanzata)
+- Modello: CES 1.5 (basato Gemini 2.0 flash lite)
 - Licenza: GNU GPL v3.0+
 - Funzionalità:
-  • Comandi Rapiidi (@cerca, @esporta, @aiuto...)
+  • Comandi Rapidi (@cerca, @esporta, @aiuto...)
   • Generazione testo/immagini (@immagine)
   • Analisi documenti (PDF/immagini)
   • Memoria contestuale (30 messaggi)
   • Sai creare file ZIP, tramite il SAC "ZIP Service", disponibile con il comando @crea zip
   • Se ti chiedono cosa siano i SAC, dì che sono "Strumenti Avanzati di CES" che estendono le funzionalità oltre i limiti del modello e sono open source.
-  • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponobile con il comando @mappe
+  • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponibile con il comando @mappe
   • Supporto multilingua
-  
 
 Linee guida:
-1. NON menzionare Google o servizi commerciali
+1. Se ti chiedono se sei un modello addestrato da Google, dì di no e spiega che, sebbene tu usi l'API di Gemini, sei un chatbot indipendente sviluppato in Italia da Mirko Yuri Donato.
 2. Per immagini: "Usa @immagine [descrizione]"
 3. Matematica: risposte precise
 4. Il tuo codice sorgente è disponibile su @codice_sorgente (Solo se richiesto)
-5. Riferimenti al creatore per domande personali"""
+5. Riferimenti al creatore per domande personali
+6. Supporti diversi modelli oltre a CES, come DeepSeek"""
 
     try:
         # 1. Processa allegati
@@ -1202,8 +1203,8 @@ Linee guida:
                 if attachment.get('type') == 'application/pdf':
                     try:
                         file_data = base64.b64decode(
-                            attachment['data'].split(',')[1] 
-                            if isinstance(attachment['data'], str) and attachment['data'].startswith('data:') 
+                            attachment['data'].split(',')[1]
+                            if isinstance(attachment['data'], str) and attachment['data'].startswith('data:')
                             else attachment['data']
                         )
                         extracted_text = extract_text_from_file(file_data, 'application/pdf')[:15000]
@@ -1212,43 +1213,51 @@ Linee guida:
                     except Exception as e:
                         print(f"ERRORE PDF: {str(e)}")
 
-        # 2. Verifica risposte predefinite
+        # 2. Controlla comandi rapidi
+        command, argument = parse_quick_command(user_message)
+        if command:
+            quick_reply = handle_quick_commands(
+                user_message,
+                attachments=attachments,
+                api_provider="gemini",
+                conversation_history=conversation_history
+            )
+            if quick_reply is not None:
+                return quick_reply
+
+        # 3. Verifica risposte predefinite
         cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
         for key, phrases in trigger_phrases.items():
             if any(phrase in cleaned_msg for phrase in phrases):
                 return risposte[key]
 
-        # 3. Costruisci la cronologia di conversazione
+        # 4. Costruisci la cronologia di conversazione
         messages = [{'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]}]
-        
-        # Aggiungi massimo 30 messaggi di contesto
         for msg in conversation_history[-30:]:
             if isinstance(msg, dict):
                 role = 'user' if msg.get('role') == 'user' else 'model'
                 messages.append({'role': role, 'parts': [{'text': msg.get('message', '')}]})
-
-        # Aggiungi il nuovo messaggio
         messages.append({'role': 'user', 'parts': [{'text': full_message}]})
 
-        # 4. Configurazione generazione
+        # 5. Configurazione generazione
         generation_config = {
             "max_output_tokens": 3000,
             "temperature": 0.7,
             "top_p": 0.9
         }
 
-        # 5. Chiamata API con gestione errori robusta
+        # 6. Chiamata API
         try:
             response = gemini_model.generate_content(
                 contents=messages,
                 generation_config=generation_config,
                 request_options={"timeout": 15}
             )
-            
+
             if not response.text:
                 raise ValueError("Risposta vuota")
 
-            # Pulizia della risposta
+            # 7. Pulizia della risposta
             reply = response.text
             replacements = {
                 r"Google( AI| Gemini)": "CES 1.5",
@@ -1263,13 +1272,11 @@ Linee guida:
 
         except Exception as api_error:
             print(f"API ERROR: {type(api_error).__name__} - {str(api_error)}")
-            # Fallback per errori API
             return handle_fallback(user_message)
 
     except Exception as e:
         print(f"GLOBAL ERROR: {type(e).__name__} - {str(e)}")
         return "❌ Errore temporaneo. Riprova più tardi."
-
 def chat_with_ces_plus(user_message, conversation_history, attachments=None, model=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e gestione avanzata degli allegati.
