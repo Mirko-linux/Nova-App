@@ -26,6 +26,7 @@ Qui, ogni modulo è pensato per essere:
 * **Eseguibile dal browser**
 * **Sostenibile e decentralizzato**
 
+
 ---
 
 ## 🧩 Modelli principali
@@ -133,3 +134,8 @@ Per poter lavorare efficacemente sul codice, assicurati di avere familiarità co
 **Dovrai ottenere e configurare le tue API key personali** dai rispettivi provider (es. Google AI Studio per Gemini, Openrouter per DeepSeek R1, ecc.).
 
 Ti consigliamo di creare un file `.env` nella directory principale del progetto per gestire le tue API key in modo sicuro. Ecco un esempio di come potrebbe apparire il tuo file `.env`:
+
+## Documentazione legale
+
+- [Termini di Servizio](docs/tos.md)
+- [Privacy Policy](docs/Policy.md)
