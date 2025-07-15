@@ -35,14 +35,6 @@ Rispetto al suo predecessore CES 1.0, CES 1.5 è in grado di gestire un ventagli
 
 ---
 
-## Performance
-
-- Latency media: ~150ms su server Arcadia
-- Accuratezza test NLP generico: 92.3%
-- Bias ridotto rispetto a CES 1.0 (±20% nei benchmark interni)
-
----
-
 ## Limiti e Considerazioni Etiche
 
 - Non garantita la piena affidabilità su domini altamente specialistici (es. medicina, finanza)
