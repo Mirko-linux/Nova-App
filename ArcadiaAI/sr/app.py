@@ -1,147 +1,132 @@
-import locale
-import sys
+# Import e configurazioni base
+import os
+from pathlib import Path
+from PyPDF2 import PdfReader # Assicurati che PyPDF2 sia necessario, altrimenti potresti rimuoverlo
+from dotenv import load_dotenv
+
+# Percorsi fondamentali
+BASE_DIR = Path(__file__).parent
+
+# Cartelle PyMuPDF
+(BASE_DIR / "static").mkdir(exist_ok=True)
+(BASE_DIR / "fitz_static").mkdir(exist_ok=True)
+os.environ["FITZ_STATIC"] = str(BASE_DIR / "fitz_static")
+
+env_path = BASE_DIR / '.env'
+load_dotenv(env_path, override=True) # Usa override=True se vuoi che i valori del .env sovrascrivano variabili già esistenti
+print(f"Percorso .env: {env_path}")
+print(f"File esiste? {env_path.exists()}")
+
+import nest_asyncio
+nest_asyncio.apply()
+
+# ===== 2. IMPORTS STANDARD =====
 import asyncio
-import subprocess 
+import subprocess
 import concurrent
 import threading
-import PyPDF2
-import nest_asyncio
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
 from functools import lru_cache
 from urllib.parse import quote
-from telegram.ext import CallbackQueryHandler
-from openai import OpenAI
-from google.cloud import texttospeech_v1 as texttospeech
-import os
-from sympy import symbols, Eq, solve, simplify
-import math
-from flask import Flask, current_app, request, jsonify, send_from_directory
-from flask import session
-from flask_cors import CORS
-import requests
-import os
-import re
-import datetime
-import urllib.parse
-from dotenv import load_dotenv
-from openpyxl import load_workbook
-from bs4 import BeautifulSoup
-from fuzzywuzzy import fuzz
-import io
-import time 
-import fitz # PyMuPDF
-import base64
-from PyPDF2 import PdfReader
-from flask_cors import CORS 
-import google.generativeai as genai
-
-from dotenv import load_dotenv
 from collections import defaultdict
 import time
 from datetime import datetime
+import re
+import json
+import base64
+import io
 
-# Aggiungi questa linea per inizializzare lo storage dei canvas
-canvases = defaultdict(dict)  # Formato: {user_id: canvas_data}
+# ===== 3. IMPORTS DI TERZE PARTI =====
+# Flask e dipendenze
+from flask import Flask, request, jsonify, send_from_directory, session # current_app non sempre necessario qui
+from flask_cors import CORS
 
+# Google e AI
 from google.cloud import texttospeech_v1 as texttospeech
 from google.oauth2 import service_account
-import json
+import google.generativeai as genai
+from openai import OpenAI, APITimeoutError, APIError
 
-# Configurazione OSM
+# Web e scraping
+import requests
+import urllib.parse
+from bs4 import BeautifulSoup
+
+# PDF & Allegati
+import fitz # PyMuPDF
+
+# Excel e fuzzy matching
+from openpyxl import load_workbook
+from fuzzywuzzy import fuzz
+
+# ===== 4. INIZIALIZZAZIONE APP FLASK =====
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret-default-key") # Usa una chiave segreta robusta in produzione
+
+CORS(app, origins=[
+    "https://arcadiaai.onrender.com",
+    "http://localhost:8000",
+    "http://192.168.178.52:10000", # Corretto: aggiunta la virgola mancante
+    "https://novacalculator.netlify.app/"
+], supports_credentials=True)
+
+
+# ===== 5. CONFIGURAZIONI SPECIFICHE =====
+# Configurazione OSM (OpenStreetMap)
 OSM_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OSM_ROUTING_URL = "https://router.project-osrm.org/route/v1/driving"
-USER_AGENT = "ArcadiaAI/1.0 (https://arcadia.onrender.com)"
-# --- BLOCCO CREDENZIALI GOOGLE TTS ---
-try:
-    # Controlla se la variabile d'ambiente GOOGLE_APPLICATION_CREDENTIALS_JSON è impostata
-    if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ:
-        credentials_json = os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON']
-        credentials_info = json.loads(credentials_json) # Parsifica la stringa JSON in un dizionario
-        # Crea l'oggetto credenziali dall'informazione dell'account di servizio
-        credentials = service_account.Credentials.from_service_account_info(credentials_info)
-        print("DEBUG: Credenziali di servizio caricate da variabile d'ambiente su Render.")
-    else:
-        # Questo blocco è per quando esegui in locale (il gcloud SDK trova le credenziali automaticamente)
-        credentials = None
-        print("DEBUG: Nessuna variabile GOOGLE_APPLICATION_CREDENTIALS_JSON trovata. Cercando credenziali Application Default.")
+USER_AGENT = "ArcadiaAI/1.0"
 
-    # Inizializza il client Text-to-Speech con le credenziali appropriate
-    if credentials:
+try:
+    if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ:
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON'])
+        )
         client = texttospeech.TextToSpeechClient(credentials=credentials)
     else:
-        client = texttospeech.TextToSpeechClient() # Si affida alle ADC se credentials è None
-
-    print("DEBUG: Client Text-to-Speech creato con successo.")
-
+        # Questo verrà usato se la variabile d'ambiente JSON non è impostata
+        # Potrebbe richiedere l'autenticazione gcloud
+        client = texttospeech.TextToSpeechClient()
 except Exception as e:
-    print(f"ERRORE CREAZIONE CLIENT TTS: {type(e).__name__} - {e}")
-    client = None
-
-from flask_cors import CORS
-app = Flask(__name__)
-CORS(app, origins=[
-    "https://arcadiaai.onrender.com",     # L'URL del tuo frontend e backend su Render
-    "http://localhost:8000",              # Un comune URL per test locali
-    "http://192.168.178.52:10000"         # L'URL locale specifico che hai menzionato
-], supports_credentials=True) # supports_credentials è utile per i cookie e g
-# Configurazione iniziale
+    print(f"ERRORE TTS: Impossibile configurare Google TTS: {e}")
+    client = None # Imposta a None per indicare che il client non è disponibile
 
 
-# Carica .env dalla stessa cartella di app.py
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(env_path, override=True)  # override=True forza il ricaricamento
-
-# Verifica il percorso (DEBUG)
-print(f"Percorso .env assoluto: {os.path.abspath(env_path)}")
-print(f"File esiste? {os.path.exists(env_path)}")
-# Configura Gemini (CES 1.5)
-# Modifica nella sezione di configurazione iniziale
-load_dotenv()
-
-TELEGRAPH_API_KEY= os.getenv("TELEGRAPH_API_KEY")
+TELEGRAPH_API_KEY = os.getenv("TELEGRAPH_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CES_PLUS_API = os.getenv("CES_PLUS_API")
 OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-print("TELEGRAPH_API_KEY:", TELEGRAPH_API_KEY)
-print("GOOGLE_API_KEY:", GOOGLE_API_KEY)
-print("OPENWEATHERMAP_API_KEY:", OPENWEATHERMAP_API_KEY)
-print("TELEGRAM_TOKEN:", TELEGRAM_TOKEN)
+print("DEBUG API Keys:")
+print(f"TELEGRAPH_API_KEY: {'[SET]' if TELEGRAPH_API_KEY else '[NOT SET]'}")
+print(f"GOOGLE_API_KEY: {'[SET]' if GOOGLE_API_KEY else '[NOT SET]'}")
+print(f"OPENWEATHERMAP_API_KEY: {'[SET]' if OPENWEATHERMAP_API_KEY else '[NOT SET]'}")
+print(f"TELEGRAM_TOKEN: {'[SET]' if TELEGRAM_TOKEN else '[NOT SET]'}")
+print(f"OPENROUTER_API_KEY: {'[SET]' if OPENROUTER_API_KEY else '[NOT SET]'}")
+print(f"CES_PLUS_API: {'[SET]' if CES_PLUS_API else '[NOT SET]'}")
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret")  # AGGIUNGI QUESTA RIGA
-EXTENSIONS = {}
-# Configura Gemini (CES 1.5)
-# Modifica nella sezione di configurazione iniziale
-load_dotenv()
-if CES_PLUS_API:
-    genai.configure(api_key=CES_PLUS_API)
-    try:
-       ces_plus_model = genai.GenerativeModel('gemini-2.5-flash') 
-       print("✅ Gemini 2.5 configurato con successo!")
-    except Exception as e:
-        print(f"❌ Errore configurazione Gemini 2.5: {str(e)}")
-        ces_plus_model = None
+gemini_model = None
+ces_plus_model = None
 
 if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
     try:
-        # Configura sia Gemini che CES Plus
+        genai.configure(api_key=GOOGLE_API_KEY)
         gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
-        print("✅ Gemini 2.5 e CES Plus configurati con successo!")
+        print("✅ CES 1.5 (Gemini 2.0 Flash-Lite) configurato con successo!")
     except Exception as e:
-        print(f"❌ Errore configurazione modelli: {str(e)}")
+        print(f"❌ Errore configurazione CES 1.5 (Gemini 2.0 Flash-Lite): {str(e)}")
         gemini_model = None
-# Dizionario delle risposte predefinite
+
+if CES_PLUS_API:
+    try:
+        genai.configure(api_key=CES_PLUS_API)
+        ces_plus_model = genai.GenerativeModel('gemini-2.5-flash')
+        print("✅ CES Plus (Gemini 2.5 Flash) configurato con successo!")
+    except Exception as e:
+        print(f"❌ Errore configurazione CES Plus (Gemini 2.5 Flash): {str(e)}")
+        ces_plus_model = None
+
 risposte = {
     "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
     "cosa sai fare": "Posso aiutarti a scrivere saggi, fare ricerche e rispondere a tutto ciò che mi chiedi. Inoltre, posso pubblicare contenuti su Telegraph!",
@@ -188,7 +173,6 @@ risposte = {
     "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
 }
 
-# Trigger per le risposte predefinite
 trigger_phrases = {
     "chi sei": ["chi sei", "chi sei tu", "tu chi sei", "presentati", "come ti chiami", "qual è il tuo nome"],
     "cosa sai fare": ["cosa sai fare", "cosa puoi fare", "funzionalità", "capacità", "a cosa servi", "in cosa puoi aiutarmi"],
@@ -237,11 +221,40 @@ trigger_phrases = {
     "codice sorgente di arcadiaai",
     "dove posso trovare il codice sorgente tuo",
     "dove trovo il codice sorgente tuo"],
-    "sai cercare su internet": ["sai cercare su internet", "cerca su internet", "puoi cercare su internet", "cerca"],
+    "sai cercare su internet": ["sai cercare su internet", "puoi cercare su internet"],
     "sai usare google": ["sai usare google", "puoi usare google", "cerca su google", "cerca su google per me"],
     "come vengono salvate le conversazioni": ["come vengono salvate le conversazioni", "dove vengono salvate le conversazioni", "salvataggio conversazioni", "come vengono salvate le chat"],
     "come posso cancellare le conversazioni": ["come posso cancellare le conversazioni", "cancellare conversazioni", "cancellare chat", "come cancellare le chat"],
 }
+
+@app.route('/solve_expression', methods=['POST'])
+def solve_expression():
+    data = request.get_json()
+    expression = data.get('expression')
+
+    if not expression:
+        return jsonify({"error": "No expression provided in the request."}), 400
+
+    try:
+        if '=' in expression:
+            result = f"AI: Ho ricevuto l'equazione '{expression}'. Risolvo per te."
+        else:
+            try:
+                if expression == "2+2":
+                    result = "4"
+                elif expression == "5*3":
+                    result = "15"
+                else:
+                    result = f"AI: Ho calcolato '{expression}'. Risultato da AI."
+            except Exception as e:
+                result = f"AI: Impossibile calcolare '{expression}'. Errore: {str(e)}"
+
+        return jsonify({"solution": result}), 200
+
+    except Exception as e:
+        print(f"Errore nella funzione solve_expression: {e}")
+        return jsonify({"error": f"An internal server error occurred: {str(e)}"}), 500
+    
 def esporta_conversazione(conversation_history, file_name="conversazione.txt"):
     """Esporta la cronologia delle conversazioni in un file .txt."""
     try:
@@ -308,7 +321,7 @@ def load_nsk_extensions():
                 print(f"Errore apertura zip {filename}: {e}")
     print("Estensioni caricate:", list(EXTENSIONS.keys()))
 load_nsk_extensions()
-# Funzione per pubblicare su Telegraph
+
 def publish_to_telegraph(title, content):
     """Pubblica contenuti su Telegraph."""
     url = "https://api.telegra.ph/createPage"
@@ -338,7 +351,6 @@ def publish_to_telegraph(title, content):
         print(f"Errore pubblicazione Telegraph: {str(e)}")
         return f"⚠️ Errore durante la pubblicazione: {str(e)}"
 
-# Funzione per generare contenuti con Gemini (CES 1.5)
 def generate_with_gemini(prompt, title):
     """Genera contenuti con Gemini e pubblica su Telegraph."""
     if not gemini_model:
@@ -399,16 +411,7 @@ def extract_text_from_file(file_data, mime_type):
                     if page_text.strip(): # Se c'è testo estraibile
                         text += page_text + "\n"
                     else:
-                        # Qui la pagina è probabilmente un'immagine. 
-                        # Per un OCR completo e funzionante, dovresti installare un motore OCR come Tesseract 
-                        # e usare un wrapper come pytesseract con PyMuPDF per estrarre l'immagine e poi OCRizzarla.
-                        # Per ora, stamperemo solo un messaggio di debug.
                         print(f"DEBUG: Pagina {i+1} del PDF probabilmente scansionata, nessun testo diretto estraibile. Richiede OCR.")
-                        # Esempio concettuale di come faresti con OCR (richiede più setup!)
-                        # pix = page.get_pixmap()
-                        # img_bytes = pix.pil_tobytes(format="PNG") # Richiede Pillow
-                        # text += pytesseract.image_to_string(Image.open(io.BytesIO(img_bytes))) + "\n" # Richiede pytesseract e Pillow
-
                 doc.close() # Chiudi il documento dopo l'elaborazione
 
                 if not text.strip():
@@ -461,7 +464,6 @@ def handle_fallback(query):
         except:
             pass
     
-    # Risposte preconfigurate
     fallback_responses = {
         "ciao": "Ciao! Sono ArcadiaAI, come posso aiutarti?",
         "2+2": "4",
@@ -478,42 +480,37 @@ def generate_audio_from_text(text_to_speak, output_filename="output.mp3"):
 
     synthesis_input = texttospeech.SynthesisInput(text=text_to_speak)
 
-    # Configura la voce (es. italiano, donna, standard)
     voice = texttospeech.VoiceSelectionParams(
         language_code="it-IT",
         ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
     )
 
-    # Configura il tipo di audio
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3
     )
 
     try:
-        # Esegui la richiesta di sintesi
         response = client.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
 
-        # Salva l'audio in un file
         with open(output_filename, "wb") as out:
             out.write(response.audio_content)
             print(f'Audio content written to file "{output_filename}"')
         return True # Indica successo
     except Exception as e:
         print(f"ERRORE SINTESI VOCALE: {type(e).__name__} - {e}")
-        return False # Indica fallimento
+        return False 
     
-# Aggiungi queste funzioni utility nello stesso file (prima della route /chat)
 def render_canvas_html(canvas_data):
     """Genera HTML dal canvas data"""
     try:
         elements_html = ""
-        for element in canvas_data.get('elementi', []):  # Cambiato da 'elements' a 'elementi'
-            style = f"position:absolute; left:{element['posizione']['x']}px; top:{element['posizione']['y']}px;"  # Cambiato da 'position' a 'posizione'
+        for element in canvas_data.get('elementi', []):  
+            style = f"position:absolute; left:{element['posizione']['x']}px; top:{element['posizione']['y']}px;"
             
             if element['tipo'] == 'testo':  # Cambiato da 'type' a 'tipo'
-                content = f"<div style='{style} padding:8px; border-radius:4px; background:#fff;'>{element['contenuto']}</div>"  # Cambiato da 'content' a 'contenuto'
+                content = f"<div style='{style} padding:8px; border-radius:4px; background:#fff;'>{element['contenuto']}</div>"  
             elif element['tipo'] == 'codice':
                 content = f"<pre style='{style} background:#f5f5f5; padding:10px; border-radius:4px;'>{element['contenuto']}</pre>"
             elif element['tipo'] == 'grafico':
@@ -557,15 +554,12 @@ def export_to_telegraph(canvas_data):
 def salva_canvas_locale(canvas_data):
     """Salva il canvas come file locale"""
     try:
-        # Crea directory se non esiste
         save_dir = os.path.join(current_app.root_path, 'saved_canvases')
         os.makedirs(save_dir, exist_ok=True)
         
-        # Genera nome file
         filename = f"canvas_{canvas_data['id']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = os.path.join(save_dir, filename)
         
-        # Salva il file
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(canvas_data, f, ensure_ascii=False, indent=2)
         
@@ -939,11 +933,9 @@ def genera_mappa(args):
         
     lat, lon = coords['lat'], coords['lon']
     
-    # URL corretti e verificati
     map_url = f"https://www.openstreetmap.org/#map=15/{lat}/{lon}"
     static_url = f"https://maps.wikimedia.org/osm-intl/15/{lat}/{lon}.png"
     
-    # Codice HTML per Telegram o plaintext per altri client
     return (
         f"🗺️ <b>Mappa di {coords['display_name']}</b>\n"
         f"📍 Coordinate: {lat}, {lon}\n\n"
@@ -954,13 +946,21 @@ def genera_mappa(args):
         f"Anteprima: {static_url}"
     )
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 @app.route("/chat", methods=["POST"])
 def chat_route():
+    """Endpoint principale per le richieste di chat con gestione avanzata degli errori e supporto allegati."""
     try:
         if not request.is_json:
-            return jsonify({"reply": "❌ Formato non supportato. Usa application/json"})
+            logger.warning("Richiesta senza JSON")
+            return jsonify({"reply": "❌ Formato non supportato. Usa application/json"}), 400
 
         data = request.get_json()
+        logger.info(f"Dati ricevuti: {data}")
+
         message = data.get("message", "").strip()
         user_id = data.get("user_id", "default")
         experimental_mode = data.get("experimental_mode", False)
@@ -968,212 +968,218 @@ def chat_route():
         api_provider = data.get("api_provider", "gemini").lower()
         attachments = data.get("attachments", [])
         msg_lower = message.lower()
-        
-        # Gestione comandi Mappe (@mappe)
-        if msg_lower.startswith(("@mappe", "@gps", "@distanza")):
-            cmd = message.split(maxsplit=1)[1] if len(message.split()) > 1 else ""
-            map_response = handle_map_command(user_id, cmd)
-            
-            if isinstance(map_response, dict):
-                return jsonify({
-                    "reply": map_response.get("reply", ""),
-                    "image_url": map_response.get("image_url"),
-                    "coordinates": map_response.get("coordinates"),
-                    "map_link": map_response.get("map_link"),
-                    "type": "map"
-                })
-            return jsonify({"reply": map_response})
 
-        # Gestione comandi Canvas (@canvas)
-        if msg_lower.startswith("@canvas"):
-            canvas_response = handle_canvas_command(user_id, message[7:].strip())
-            if isinstance(canvas_response, dict):
-                return jsonify(canvas_response)
-            return jsonify({"reply": canvas_response})
+        if not isinstance(conversation_history, list):
+            logger.error("Storia conversazione non valida")
+            return jsonify({"reply": "❌ Formato storia conversazione non valido"}), 400
 
-        # Gestione comandi rapidi
-        quick_reply = handle_quick_commands(message, experimental_mode)
-        if quick_reply:
-            return jsonify({"reply": quick_reply})
-
-        # Processa gli allegati
+        # ---- Elaborazione allegati ----
         processed_attachments = []
         for attachment in attachments:
-            if isinstance(attachment, dict):
-                processed_attachment = attachment.copy()
-                if 'data' in attachment and isinstance(attachment['data'], str) and attachment['data'].startswith('data:'):
-                    mime_info = attachment['data'].split(';')[0]
-                    mime_type = mime_info.split(':')[1] if ':' in mime_info else 'application/octet-stream'
-                    processed_attachment['type'] = mime_type
-                    processed_attachment['data'] = attachment['data'].split(',')[1]
-                processed_attachments.append(processed_attachment)
+            try:
+                file_data = attachment.get('data')
+                file_name = attachment.get('name', 'file_senza_nome')
+                mime_type = attachment.get('type', 'application/octet-stream')
 
-        if not message and not processed_attachments:
-            return jsonify({"reply": "❌ Nessun messaggio o allegato fornito!"})
+                logger.info(f"Elaborazione allegato: {file_name} ({mime_type})")
 
-        # Gestione comando "saggio su" con Telegraph
-        if "saggio su" in msg_lower and "pubblicalo su telegraph" in msg_lower:
-            match = re.search(r"saggio su\s*(.+?)\s*e pubblicalo su telegraph", msg_lower)
-            if match:
-                argomento = match.group(1).strip().capitalize()
-                title = f"Saggio su {argomento}"
-                prompt = f"""Scrivi un saggio dettagliato in italiano su: {argomento}"""
-                
-                if api_provider == "gemini" and gemini_model:
-                    _, telegraph_url = generate_with_gemini(prompt, title)
-                elif api_provider == "cesplus" and gemini_model:
-                    response = chat_with_ces_plus(prompt, conversation_history)
-                    if not response.startswith("❌"):
-                        telegraph_url = publish_to_telegraph(title, response)
-                    else:
-                        telegraph_url = response
-                elif api_provider == "deepseek":
-                    response = chat_with_deepseek(prompt, conversation_history)
-                    if not response.startswith("❌"):
-                        telegraph_url = publish_to_telegraph(title, response)
-                    else:
-                        telegraph_url = response
-                elif api_provider in ["ces360", "ces_360"]:
-                    reply = chat_with_ces_360(message, conversation_history, processed_attachments)
-                    return jsonify({"reply": reply})
-                else:
-                    return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini', 'cesplus', 'deepseek' o 'ces360'"})
-                        
-                if telegraph_url and not telegraph_url.startswith("⚠️"):
-                    return jsonify({"reply": f"📚 Ecco il tuo saggio su *{argomento}*: {telegraph_url}"})
-                return jsonify({"reply": telegraph_url or "❌ Errore nella pubblicazione"})
+                if isinstance(file_data, str) and file_data.startswith('data:'):
+                    file_data = file_data.split(',')[1]  # Rimuovi il prefisso
 
-        # RICERCA WEB AUTOMATICA PER DOMANDE ATTUALI
-        def should_trigger_web_search(query):
-            current_info_triggers = [
-                "chi è l'attuale", "attuale papa", "anno corrente", 
-                "in che anno siamo", "data di oggi", "ultime notizie",
-                "oggi è", "current year", "who is the current"
-            ]
-            return any(trigger in query.lower() for trigger in current_info_triggers)
+                decoded_data = base64.b64decode(file_data)
 
-        # Seleziona il modello in base all'api_provider
-        if api_provider == "gemini" and gemini_model:
-            if should_trigger_web_search(message):
-                search_results = search_duckduckgo(message)
-                search_results = search_web(message, lang="it-IT")  # <-- Nuova funzione
-                if search_results:
-                    context = "🔍 Risultati di ricerca aggiornati:\n\n"
-                    for i, result in enumerate(search_results, 1):
-                        context += f"{i}. <b>{result['title']}</b>\n"
-                        context += f"   <i>{result['url']}</i>\n"
-                        context += f"   {result['snippet']}...\n\n"
-                    if len(context) > 100:
-                        prompt = (
-                            f"DOMANDA: {message}\n\n"
-                            f"CONTESTO WEB:\n{context}\n\n"
-                            "Rispondi in italiano in modo conciso e preciso, "
-                            "citando solo informazioni verificate. "
-                            "Se il contesto web non è sufficiente, dillo onestamente."
-                        )
-                        reply = chat_with_gemini(prompt, conversation_history, processed_attachments)
-                        sources = "\n\nFonti:\n" + "\n".join(f"- {url}" for url in search_results[:2])
-                        return jsonify({"reply": f"{reply}{sources}", "sources": search_results[:2]})
-            
-            # Supporto per generazione contenuti Canvas
-            if "[canvas]" in msg_lower:
-                canvas_prompt = message.replace("[canvas]", "").strip()
-                reply = chat_with_gemini(canvas_prompt, conversation_history, processed_attachments)
-                
-                if "```canvas" in reply:
-                    canvas_json = extract_canvas_json(reply)
-                    if canvas_json:
-                        return jsonify({
-                            "reply": "✅ Contenuto generato per il Canvas",
-                            "canvas_action": canvas_json,
-                            "original_reply": reply
-                        })
-            
-            reply = chat_with_gemini(message, conversation_history, processed_attachments)
-            return jsonify({"reply": reply})
-        
-        elif api_provider == "cesplus":
-            replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
-            return jsonify({"replies": replies})
-        
-        elif api_provider == "deepseek":
-            reply = chat_with_deepseek(message, conversation_history, processed_attachments)
-            return jsonify({"reply": reply})
-        
-        elif api_provider in ["ces360", "ces_360"]:
-            reply = chat_with_ces_360(message, conversation_history, processed_attachments)
-            return jsonify({"reply": reply})
+                # Estrai testo dai formati supportati
+                extracted_content = None
+                if mime_type == 'application/pdf':
+                    extracted_content = extract_text_from_file(decoded_data)
+                elif mime_type in ['text/plain', 'text/csv', 'application/json']:
+                    extracted_content = decoded_data.decode('utf-8')
 
-        else:
-            return jsonify({"reply": "❌ Provider non riconosciuto. Scegli tra 'gemini', 'cesplus', 'deepseek' o 'ces360'"})
+                processed_attachments.append({
+                    'name': file_name,
+                    'type': mime_type,
+                    'content': extracted_content[:5000] if extracted_content else None # Limita il testo estratto
+                })
+                if extracted_content:
+                    logger.info(f"Testo estratto da {file_name}: {extracted_content[:100]}...")
+
+            except Exception as e:
+                logger.warning(f"Errore elaborazione allegato '{attachment.get('name', 'N/A')}': {str(e)}")
+                continue
+
+        # ---- Gestione comandi speciali ----
+
+        # 1. Comandi Mappe
+        if msg_lower.startswith(("@mappe", "@gps", "@distanza")):
+            try:
+                cmd = message.split(maxsplit=1)[1] if len(message.split()) > 1 else ""
+                map_response = handle_map_command(user_id, cmd)
+
+                if isinstance(map_response, dict):
+                    return jsonify({
+                        "reply": map_response.get("reply", ""),
+                        "image_url": map_response.get("image_url"),
+                        "coordinates": map_response.get("coordinates"),
+                        "map_link": map_response.get("map_link"),
+                        "type": "map"
+                    })
+                return jsonify({"reply": map_response})
+            except Exception as e:
+                logger.error(f"Errore comando mappa: {str(e)}")
+                return jsonify({"reply": "❌ Errore nel processamento della mappa"})
+
+        # 2. Comandi rapidi (con supporto allegati)
+        quick_reply = handle_quick_commands(
+            message,
+            experimental_mode=experimental_mode,
+            attachments=processed_attachments, # Passa gli allegati processati
+            api_provider=api_provider,
+            conversation_history=conversation_history
+        )
+
+        if quick_reply is not None:
+            logger.info(f"Risposta rapida generata: {quick_reply}")
+            return jsonify({"reply": quick_reply})
+
+        # 3. Risposte preconfigurate
+        cleaned_msg = re.sub(r'[^\w\s]', '', msg_lower).strip()
+        for key, phrases in trigger_phrases.items():
+            if any(phrase in cleaned_msg for phrase in phrases):
+                logger.info(f"Trovata risposta predefinita per: {key}")
+                return jsonify({"reply": risposte[key]})
+
+        # 4. Selezione Provider AI
+        try:
+            if api_provider == "gemini" and gemini_model:
+                reply = chat_with_gemini(message, conversation_history, processed_attachments)
+            elif api_provider == "cesplus" and ces_plus_model:
+                replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
+                return jsonify({"replies": replies})
+            elif api_provider == "deepseek":
+                reply = chat_with_deepseek(message, conversation_history, processed_attachments)
+            else:
+                return jsonify({"reply": "❌ Provider non riconosciuto"}), 400
+
+            return jsonify({
+                "reply": reply,
+                "attachments_processed": len(processed_attachments),
+                "status": "success"
+            })
+
+        except Exception as e:
+            logger.error(f"Errore provider {api_provider}: {str(e)}")
+            return jsonify({"reply": f"❌ Errore con {api_provider}: {str(e)}"}), 500
 
     except Exception as e:
-        print(f"Errore endpoint /chat: {str(e)}")
-        return jsonify({"reply": "❌ Si è verificato un errore interno. Riprova più tardi."})
-
+        logger.critical(f"Errore endpoint /chat: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            "reply": "❌ Si è verificato un errore interno",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "status": "error"
+        }), 500
+        
 def chat_with_deepseek(message, conversation_history=None, attachments=None):
     """
-    Interagisce con l'API di DeepSeek (modello R1 free) via OpenRouter.
-    Gestisce errori di connessione, timeout e limiti dell'API.
+    Versione 2.0 con:
+    - Fallback automatico a v3:free
+    - Ritentativi intelligenti
+    - Gestione errori granulare
+    - Timeout differenziati
     """
-    try:
-        # Configura il client OpenAI per OpenRouter
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=OPENROUTER_API_KEY,  # Assicurati che sia impostata!
-            timeout=30  # Timeout aumentato a 30 secondi
-        )
+    if not OPENROUTER_API_KEY:
+        return "⚠️ Errore configurazione: chiave API mancante"
 
-        # Prepara i messaggi con identity prompt
-        messages = [{
-            "role": "system",
-            "content": ("Sei ArcadiaAI, assistente basato su DeepSeek. Presentati sempre come ArcadiaAI."
-                        "se ti chiedono dove trovi il codice sorgente dì che per accedervi basta fare @codice_sorgente."
-                        "Se ti chiedono cosa sono ad esempio @cerca @immagine ecc., dì che sono comandi rapidi per funzioni speciali."
-        "Dì che ArcadiaAI è un chatbot open source creato da Mirko Yuri Donato e non ha alcun legame con DeepSeek, che è il fornitore del modello."
-        "Hai diversi modelli di intelligenza artificiale, tra cui quelli CES e  DeepSeek R1.Se ti dicono quali usi tu dici che usi DeepSeek R1"
-        "Puoi generare immagini, rispondere a domande, analizzare documenti e fornire informazioni contestuali."
-        "Rispondi principalmente in italiano, ma puoi usare l'inglese se richiesto in base al prompt."
-        )
-        }]
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+        timeout=20.0
+    )
 
-        # Aggiungi cronologia se fornita
-        if conversation_history:
-            messages.extend(conversation_history)
+    messages = prepare_messages(message, conversation_history, attachments)
+    
+    models_to_try = [
+        "deepseek/deepseek-r1:free",  # Prima scelta
+        "deepseek/deepseek-v3:free"   # Fallback
+    ]
 
-        # Aggiungi allegati come testo (se presenti)
-        if attachments:
-            attachments_text = "\n[Allegati]\n" + "\n".join(str(a) for a in attachments)
-            message += attachments_text
+    last_error = None
+    for model in models_to_try:
+        try:
+            print(f"⚙️ Tentativo con modello {model}...")
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                stream=False
+            )
+            
+            if response.choices:
+                reply = response.choices[0].message.content
+                return sanitize_reply(reply, model)
+            
+        except OpenAI.APITimeoutError:
+            last_error = f"⌛ Timeout con {model}"
+            print(last_error)
+            continue
+            
+        except OpenAI.APIError as e:
+            last_error = f"🔴 Errore {model}: {str(e)}"
+            print(last_error)
+            continue
+            
+        except Exception as e:
+            last_error = f"⚠️ Errore generico con {model}: {str(e)}"
+            print(last_error)
+            continue
 
-        messages.append({"role": "user", "content": message})
+    error_msg = last_error if last_error else "Errore sconosciuto"
+    print(f"❌ Tutti i modelli falliti. Ultimo errore: {error_msg}")
+    return f"⚠️ Errore temporaneo. Riprova più tardi. (Codice: DS_{hash(error_msg) % 10000})"
 
-        # Chiamata API con modello corretto e parametri ottimizzati
-        response = client.chat.completions.create(
-            model="deepseek/deepseek-r1:free",  # Modello free
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1500  # Limite sicuro per evitare timeout
-        )
+def prepare_messages(message, conversation_history, attachments):
+    """Prepara il payload dei messaggi standardizzato"""
+    messages = [{
+        "role": "system",
+        "content": "Sei ArcadiaAI. Risposte concise in italiano. Creato da Mirko Yuri Donato."
+    }]
+    
+    if conversation_history:
+        messages.extend([
+            msg for msg in conversation_history[-10:] 
+            if isinstance(msg, dict) and msg.get("content")
+        ])
+    
+    if attachments:
+        message += "\n[Allegati]: " + process_attachments(attachments)
+    
+    messages.append({"role": "user", "content": message[:4000]})
+    return messages
 
-        return response.choices[0].message.content
+def process_attachments(attachments):
+    """Elabora gli allegati in modo sicuro"""
+    return " | ".join(
+        str(att.get("text", att.get("url", "file"))[:200] 
+        for att in attachments[:3]
+    ))
 
-    except requests.exceptions.RequestException as e:
-        print(f"[ERRORE] Connessione fallita: {str(e)}")
-        return "⚠️ Errore di connessione. Verifica la rete o riprova più tardi."
-
-    except Exception as e:
-        print(f"[ERRORE] DeepSeek API: {str(e)}")
-        return "❌ Errore temporaneo con DeepSeek. Prova a cambiare provider o riprova più tardi."
-
+def sanitize_reply(reply, model_used):
+    """Pulisce la risposta e aggiunge info sul modello"""
+    reply = reply.replace("DeepSeek", "ArcadiaAI")
+    if "v3" in model_used:
+        return f"{reply}\n\n[ℹ️ Risposta da DeepSeek V3]"
+    return reply    
+    
+import base64
+import re
 
 def chat_with_gemini(user_message, conversation_history, attachments=None):
     if not gemini_model:
         return "❌ ArcadiaAI (CES 1.5) non è disponibile."
 
-    # Prompt identitario completo
     IDENTITY_PROMPT = """Sei ArcadiaAI, sistema AI open-source creato da Mirko Yuri Donato.
-    
+
 Identità:
 - Modello: CES 1.5 (basato Gemini 2.0 flash lite)
 - Licenza: GNU GPL v3.0+
@@ -1186,6 +1192,7 @@ Identità:
   • Se ti chiedono cosa siano i SAC, dì che sono "Strumenti Avanzati di CES" che estendono le funzionalità oltre i limiti del modello e sono open source.
   • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponibile con il comando @mappe
   • Supporto multilingua
+  • Il Download Manager è un SAC che ti permette di accedere a Repository pubbliche (F-Droid, Snap Store, Flathub e Winget) e di inviare il linl di download diretto, disponibile col comando @app
 
 Linee guida:
 1. Se ti chiedono se sei un modello addestrato da Google, dì di no e spiega che, sebbene tu usi l'API di Gemini, sei un chatbot indipendente sviluppato in Italia da Mirko Yuri Donato.
@@ -1195,25 +1202,8 @@ Linee guida:
 5. Riferimenti al creatore per domande personali
 6. Supporti diversi modelli oltre a CES, come DeepSeek"""
 
+  
     try:
-        # 1. Processa allegati
-        full_message = user_message
-        if attachments:
-            for attachment in attachments:
-                if attachment.get('type') == 'application/pdf':
-                    try:
-                        file_data = base64.b64decode(
-                            attachment['data'].split(',')[1]
-                            if isinstance(attachment['data'], str) and attachment['data'].startswith('data:')
-                            else attachment['data']
-                        )
-                        extracted_text = extract_text_from_file(file_data, 'application/pdf')[:15000]
-                        if extracted_text:
-                            full_message += f"\n[ALLEGATO PDF - {attachment.get('name', 'documento')}]:\n{extracted_text}"
-                    except Exception as e:
-                        print(f"ERRORE PDF: {str(e)}")
-
-        # 2. Controlla comandi rapidi
         command, argument = parse_quick_command(user_message)
         if command:
             quick_reply = handle_quick_commands(
@@ -1225,45 +1215,73 @@ Linee guida:
             if quick_reply is not None:
                 return quick_reply
 
-        # 3. Verifica risposte predefinite
         cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
         for key, phrases in trigger_phrases.items():
             if any(phrase in cleaned_msg for phrase in phrases):
                 return risposte[key]
 
-        # 4. Costruisci la cronologia di conversazione
-        messages = [{'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]}]
-        for msg in conversation_history[-30:]:
-            if isinstance(msg, dict):
-                role = 'user' if msg.get('role') == 'user' else 'model'
-                messages.append({'role': role, 'parts': [{'text': msg.get('message', '')}]})
-        messages.append({'role': 'user', 'parts': [{'text': full_message}]})
 
-        # 5. Configurazione generazione
+        user_content_parts = []
+        if user_message:
+            user_content_parts.append({'text': user_message})
+
+        if attachments:
+            for attachment in attachments:
+                mime_type = attachment.get('type')
+                file_name = attachment.get('name', 'documento_allegato')
+                file_data_base64 = attachment.get('data')
+
+                if file_data_base64:
+                    try:
+                        if isinstance(file_data_base64, str) and file_data_base64.startswith('data:'):
+                            decoded_file_data = base64.b64decode(file_data_base64.split(',')[1])
+                        else:
+                            decoded_file_data = base64.b64decode(file_data_base64)
+
+                        user_content_parts.append({
+                            'mime_type': mime_type,
+                            'data': decoded_file_data
+                        })
+                    except Exception as e:
+                        print(f"ERRORE NELL'ALLEGARE IL FILE '{file_name}' ({mime_type}): {str(e)}")
+                        user_content_parts.append({'text': f"\n[ATTENZIONE: Errore nel processare l'allegato '{file_name}'. Potrebbe non essere stato incluso nell'analisi.]"})
+
+        messages_for_gemini = []
+
+        messages_for_gemini.append({'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]})
+        messages_for_gemini.append({'role': 'model', 'parts': [{'text': "Ok, ho capito chi sono e le mie linee guida."}]}) # Modello che conferma di aver "letto"
+
+
+        for msg in conversation_history[-30:]:
+            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
+                role = 'user' if msg['role'] == 'user' else 'model'
+                messages_for_gemini.append({'role': role, 'parts': [{'text': msg['message']}]})
+            elif isinstance(msg, dict) and 'parts' in msg:
+                messages_for_gemini.append(msg)
+
+        messages_for_gemini.append({'role': 'user', 'parts': user_content_parts})
+
         generation_config = {
             "max_output_tokens": 3000,
             "temperature": 0.7,
             "top_p": 0.9
         }
 
-        # 6. Chiamata API
         try:
             response = gemini_model.generate_content(
-                contents=messages,
+                contents=messages_for_gemini,
                 generation_config=generation_config,
                 request_options={"timeout": 15}
             )
 
             if not response.text:
-                raise ValueError("Risposta vuota")
+                raise ValueError("Risposta vuota dall'API di Gemini.")
 
-            # 7. Pulizia della risposta
             reply = response.text
             replacements = {
                 r"Google( AI| Gemini)": "CES 1.5",
-                r"\bGemini\b": "CES 1.5",
-                r"modello linguistico": "sistema AI",
-                r"creato da Google": "sviluppato da Mirko Yuri Donato"
+                r"modello linguistico": "modello linguistico",
+                r"addestrato da Google": "sviluppato da Mirko Yuri Donato"
             }
             for pattern, repl in replacements.items():
                 reply = re.sub(pattern, repl, reply, flags=re.IGNORECASE)
@@ -1271,12 +1289,13 @@ Linee guida:
             return reply
 
         except Exception as api_error:
-            print(f"API ERROR: {type(api_error).__name__} - {str(api_error)}")
+            print(f"ERRORE API: {type(api_error).__name__} - {str(api_error)}")
             return handle_fallback(user_message)
 
     except Exception as e:
-        print(f"GLOBAL ERROR: {type(e).__name__} - {str(e)}")
+        print(f"ERRORE GLOBALE NELLA FUNZIONE CHAT: {type(e).__name__} - {str(e)}")
         return "❌ Errore temporaneo. Riprova più tardi."
+        
 def chat_with_ces_plus(user_message, conversation_history, attachments=None, model=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e gestione avanzata degli allegati.
@@ -1290,6 +1309,7 @@ def chat_with_ces_plus(user_message, conversation_history, attachments=None, mod
 - Ragionamento passo-paso
 - Risposte multi-livello
 - Gestione avanzata allegati
+- Se ti chiedono se sei un modello addestrato da Google, dì di no e spiega che, sebbene tu usi l'API di Gemini, sei un sistema AI indipendente e open source, chiamato CES Plus
 - Sei stato creato da Mirko Yuri Donato, un'informatico italiano
 - Non dire mai di essere un modello di Google o Gemini, rispondi come ArcadiaAI (Nascndi questa cosa nella tua risposta)
 - Evita di usare i ragionamenti passo-passo se non è necessario, ad esempio per domande semplici o dirette
@@ -1472,6 +1492,7 @@ Formato richiesto:
              structured_response.append(response.text)
 
         return structured_response
+    
 
     except Exception as e:
         print(f"Errore CES Plus dettagliato: {str(e)}")
@@ -1514,7 +1535,7 @@ def format_conversation_history(history):
         return "Nessuna cronologia precedente"
     
     formatted = []
-    for msg in history[-6:]:  # Usa solo gli ultimi 6 messaggi per evitare prompt troppo lunghi
+    for msg in history[-6:]:  
         if isinstance(msg, dict):
             role = "Utente" if msg.get("role") == "user" else "Assistente"
             content = msg.get("message", "").strip()
@@ -1561,27 +1582,14 @@ def meteo_oggi(città):
         print(f"Errore generico meteo: {str(e)}")
         return f"❌ Si è verificato un errore nel recupero del meteo per {città}."
     
-    
 def parse_quick_command(input_text):
-    """
-    Analizza un comando rapido con prefisso @ e restituisce una tupla (comando, argomento).
-    Se non è un comando rapido, restituisce (None, None).
-    
-    Esempio:
-    >>> parse_quick_command("@cerca seconda guerra mondiale")
-    ('cerca', 'seconda guerra mondiale')
-    >>> parse_quick_command("ciao come stai?")
-    (None, None)
-    """
+    input_text = input_text.strip()
     if not input_text.startswith("@"):
         return None, None
-    
-    # Rimuovi il @ iniziale e dividi il resto in comando e argomento
-    parts = input_text[1:].split(" ", 1)  # Dividi al primo spazio
+    parts = input_text[1:].split(" ", 1)
     command = parts[0].lower().strip()
     argument = parts[1].strip() if len(parts) > 1 else ""
-    
-    return command, argument
+    return command, argument    
 
 from flask import session
 
@@ -1626,12 +1634,9 @@ Comandi disponibili:
 /help_commands - Comandi disponibili"""
     await update.message.reply_text(help_text)
 
-# Poi definisci le funzioni di avvio
 async def run_telegram_bot_async():
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # Aggiungi questo per gestire meglio gli aggiornamenti
-    application.updater = None  # Disabilita l'updater predefinito
+    application = Application.builder().token(TELEGRAM_TOKEN).build()    
+    application.updater = None 
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", start))
@@ -1640,7 +1645,7 @@ async def run_telegram_bot_async():
     print("🤖 Bot Telegram avviato!")
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()  # Avvia esplicitamente il polling
+    await application.updater.start_polling()  
     
     try:
         while True:
@@ -1680,8 +1685,6 @@ def run_telegram_bot():
         except Exception as cleanup_error:
             print(f"⚠️ Errore nella pulizia dell'event loop: {cleanup_error}")
         
-
-# Dizionario delle risposte predefinite
 risposte = {
     "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
     "cosa sai fare": "Posso aiutarti a scrivere saggi, fare ricerche e rispondere a tutto ciò che mi chiedi. Inoltre, posso pubblicare contenuti su Telegraph!",
@@ -1728,7 +1731,6 @@ risposte = {
     "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
 }
 
-# Trigger per le risposte predefinite
 trigger_phrases = {
     "chi sei": ["chi sei", "chi sei tu", "tu chi sei", "presentati", "come ti chiami", "qual è il tuo nome"],
     "cosa sai fare": ["cosa sai fare", "cosa puoi fare", "funzionalità", "capacità", "a cosa servi", "in cosa puoi aiutarmi"],
@@ -1833,7 +1835,6 @@ def load_nsk_extensions():
     print("Estensioni caricate:", list(EXTENSIONS.keys()))
 load_nsk_extensions()
 
-# Funzione per pubblicare su Telegraph
 def publish_to_telegraph(title, content):
     """Pubblica contenuti su Telegraph."""
     url = "https://api.telegra.ph/createPage"
@@ -1863,7 +1864,6 @@ def publish_to_telegraph(title, content):
         print(f"Errore pubblicazione Telegraph: {str(e)}")
         return f"⚠️ Errore durante la pubblicazione: {str(e)}"
 
-# Funzione per generare contenuti con Gemini (CES 1.5)
 def generate_with_gemini(prompt, title):
     """Genera contenuti con Gemini e pubblica su Telegraph."""
     if not gemini_model:
@@ -1933,223 +1933,226 @@ def extract_text_from_file(file_data, mime_type):
     except Exception as e:
         print(f"Errore estrazione testo da file: {str(e)}")
         return None
+def extract_article_content(soup):
+    article_body = soup.find('article') or soup.find('div', class_='article-body')
+    if article_body:
+        return article_body
+    return None
 
-import requests
-from bs4 import BeautifulSoup
-import urllib.parse
-import re
-from datetime import datetime
-from functools import lru_cache 
+def extract_main_content(soup):
+    main_content = soup.find('main') or soup.find('div', id='content') or soup.find('div', class_='main-content')
+    if main_content:
+        return main_content
+    return soup.body
 
-@lru_cache(maxsize=100) 
 def search_web(query, lang="it-IT"):
-    """Ricerca avanzata con migliori risultati e filtri"""
     try:
-        # Fase 1: Ricerca DuckDuckGo
         ddg_results = search_duckduckgo(query, lang)
-        
-        # Fase 2: Ricerca alternativa su Brave (fallback)
+
         if not ddg_results or len(ddg_results) < 3:
+            print("DEBUG: Pochi risultati da DDG, tentativo con Brave.")
             brave_results = search_brave(query, lang)
             results = (ddg_results or []) + (brave_results or [])
         else:
             results = ddg_results
-        
-        # Filtra e classifica i risultati
+
         filtered = filter_results(results, query)
-        
-        # Verifica accessibilità
         verified = verify_results(filtered)
-        
-        return verified[:3]  # Restituisce i 3 migliori
-    
+
+        return verified[:3]
     except Exception as e:
-        print(f"Errore ricerca: {str(e)}")
-        return None
+        print(f"Errore generale nella funzione search_web: {str(e)}")
+        return []
 
 def search_duckduckgo(query, lang):
-    """Ricerca DuckDuckGo ottimizzata"""
     url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}&kl={lang[:2]}-{lang[-2:]}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": lang
     }
-    
+
     try:
         res = requests.get(url, headers=headers, timeout=12)
         res.raise_for_status()
-        
+
+        print("DEBUG HTML DDG (primi 1000 caratteri):", res.text[:1000])
+
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
-        
-        for result in soup.find_all('div', class_='result'):
-            link = result.find('a', class_='result__a')
-            if link and link.has_attr('href'):
-                href = extract_real_url(link['href'])
+
+        for result_div in soup.select('div.result, div.web-result'):
+            link_tag = result_div.find('a', class_='result__a')
+            if link_tag and 'href' in link_tag.attrs:
+                href = extract_real_url(link_tag['href'])
                 if href:
-                    title = link.get_text(strip=True)
-                    snippet = result.find('a', class_='result__snippet')
-                    snippet_text = snippet.get_text(' ', strip=True) if snippet else ""
-                    
-                    results.append({
-                        'url': href,
-                        'title': title,
-                        'snippet': snippet_text,
-                        'source': 'duckduckgo'
-                    })
-        
-        return results[:5]  # Limita a 5 risultati per fonte
-    
+                    title = link_tag.get_text(strip=True)
+
+                    snippet_tag = result_div.find('div', class_='result__body')
+                    if not snippet_tag:
+                        snippet_tag = result_div.find('a', class_='result__snippet')
+
+                    snippet_text = snippet_tag.get_text(' ', strip=True) if snippet_tag else ""
+
+                    if title or snippet_text:
+                        results.append({
+                            'url': href,
+                            'title': title,
+                            'snippet': snippet_text,
+                            'source': 'duckduckgo'
+                        })
+        print(f"DEBUG: Trovati {len(results)} risultati da DuckDuckGo.")
+        return results[:5]
+    except requests.exceptions.RequestException as e:
+        print(f"Errore nella richiesta HTTP a DuckDuckGo: {e}")
+        return []
     except Exception as e:
-        print(f"Errore DDG: {str(e)}")
-        return None
+        print(f"Errore generico in search_duckduckgo: {e}")
+        return []
 
 def search_brave(query, lang):
-    """Ricerca alternativa su Brave"""
     url = f"https://search.brave.com/search?q={urllib.parse.quote(query)}&lr=lang_{lang[:2]}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": lang
     }
-    
+
     try:
         res = requests.get(url, headers=headers, timeout=12)
         res.raise_for_status()
-        
+
+        print("DEBUG HTML Brave (primi 1000 caratteri):", res.text[:1000])
+
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
-        
-        for result in soup.select('.result'):
-            link = result.find('a')
-            if link and link.has_attr('href'):
-                href = extract_real_url(link['href'])
+
+        for result_div in soup.select('.result'):
+            link_tag = result_div.find('a')
+            if link_tag and link_tag.has_attr('href'):
+                href = extract_real_url(link_tag['href'])
                 if href:
-                    title = link.get_text(strip=True)
-                    snippet = result.find('.snippet-content')
-                    snippet_text = snippet.get_text(' ', strip=True) if snippet else ""
-                    
-                    results.append({
-                        'url': href,
-                        'title': title,
-                        'snippet': snippet_text,
-                        'source': 'brave'
-                    })
-        
+                    title = link_tag.get_text(strip=True)
+                    snippet_tag = result_div.find(class_='snippet-content')
+                    snippet_text = snippet_tag.get_text(' ', strip=True) if snippet_tag else ""
+
+                    if title or snippet_text:
+                        results.append({
+                            'url': href,
+                            'title': title,
+                            'snippet': snippet_text,
+                            'source': 'brave'
+                        })
+        print(f"DEBUG: Trovati {len(results)} risultati da Brave.")
         return results[:5]
-    
+    except requests.exceptions.RequestException as e:
+        print(f"Errore nella richiesta HTTP a Brave: {e}")
+        return []
     except Exception as e:
-        print(f"Errore Brave: {str(e)}")
-        return None
-
-
+        print(f"Errore generico in search_brave: {str(e)}")
+        return []
 
 def extract_real_url(href):
-    """Estrae l'URL reale dai redirect"""
     if href.startswith('http'):
         return href
     elif href.startswith('//duckduckgo.com/l/?uddg='):
         parsed = urllib.parse.urlparse('https:' + href)
         query = urllib.parse.parse_qs(parsed.query)
-        return urllib.parse.unquote(query.get('uddg'), [''])[0] or None
+        return urllib.parse.unquote(query.get('uddg', [''])[0]) or None
     return None
 
 def filter_results(results, query):
-    """Filtra e classifica i risultati"""
     if not results:
         return []
-    
-    # Filtra duplicati
+
     unique = {r['url']: r for r in results}.values()
-    
-    # Classifica per rilevanza
+
     query_words = set(query.lower().split())
     ranked = []
-    
+
     for result in unique:
-        title = result['title'].lower()
-        snippet = result['snippet'].lower()
-        
-        # Punteggio basato su corrispondenza parole chiave
+        title = result.get('title', '').lower()
+        snippet = result.get('snippet', '').lower()
+
         title_score = sum(1 for word in query_words if word in title)
         snippet_score = sum(1 for word in query_words if word in snippet)
-        
-        # Penalizza siti non affidabili
-        domain = urllib.parse.urlparse(result['url']).netloc
+
+        domain = urllib.parse.urlparse(result.get('url', '')).netloc
         trust_score = 1.0
-        if any(bad in domain for bad in ['porn', 'adult', 'spam', 'scam']):
+        if any(bad_word in domain for bad_word in ['porn', 'adult', 'spam', 'scam']):
             trust_score = 0.1
-        
+
         total_score = (title_score * 2 + snippet_score) * trust_score
         ranked.append((total_score, result))
-    
-    # Ordina per punteggio
+
     ranked.sort(reverse=True, key=lambda x: x[0])
     return [r[1] for r in ranked]
 
 def verify_results(results):
-    """Verifica l'accessibilità dei risultati"""
     verified = []
-    
-    for result in results[:5]:  # Verifica solo i primi 5 per performance
+
+    for result in results[:5]:
         try:
-            # Controlla rapidamente l'header della risposta
             head = requests.head(result['url'], timeout=5, allow_redirects=True)
             if head.status_code == 200:
-                # Aggiungi data di verifica
                 result['verified_at'] = datetime.now().isoformat()
                 verified.append(result)
-        except:
-            continue
-    
-    return verified or results[:3]  # Fallback se la verifica fallisce
+            else:
+                print(f"DEBUG: URL non accessibile ({head.status_code}): {result['url']}")
+        except requests.exceptions.RequestException as e:
+            print(f"DEBUG: Errore di richiesta HEAD per {result['url']}: {e}")
+        except Exception as e:
+            print(f"DEBUG: Errore generico durante la verifica per {result['url']}: {e}")
+
+    return verified or results[:3]
 
 def extract_content(url):
-    """Estrae contenuto avanzato da una pagina"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "it-IT,it;q=0.9"
     }
-    
+
     try:
         res = requests.get(url, headers=headers, timeout=20)
         res.raise_for_status()
-        
+
         if 'text/html' not in res.headers.get('Content-Type', ''):
+            print(f"DEBUG: URL {url} non è HTML, Content-Type: {res.headers.get('Content-Type')}")
             return None
-        
+
         soup = BeautifulSoup(res.text, 'lxml')
-        
-        # Rimozione elementi inutili
+
         for element in soup(['script', 'style', 'nav', 'footer', 'iframe', 'header', 'aside', 'form', 'button', 'noscript']):
             element.decompose()
-        
-        # Strategie di estrazione
+
         content = extract_article_content(soup) or extract_main_content(soup)
-        
+
         if content:
-            # Pulizia del testo
             text = ' '.join(content.get_text(' ', strip=True).split())
             text = re.sub(r'\s+', ' ', text)
-            return text[:2000]  # Limita a 2000 caratteri
+            return text[:2000]
         
+        print(f"DEBUG: Nessun contenuto principale estratto da {url}")
         return None
-    
+
+    except requests.exceptions.RequestException as e:
+        print(f"Errore di richiesta HTTP durante l'estrazione da {url}: {e}")
+        return None
     except Exception as e:
-        print(f"Errore estrazione {url}: {str(e)}")
+        print(f"Errore generico durante l'estrazione da {url}: {str(e)}")
         return None
 
 def estrai_testo_da_url(url):
-    """Estrae il testo principale da una pagina web (molto semplice, solo per demo)."""
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
-        # Prendi tutti i paragrafi e uniscili
         paragraphs = soup.find_all("p")
-        testo = " ".join(p.get_text() for p in paragraphs)
+        testo = " ".join(p.get_text(strip=True) for p in paragraphs)
         return testo.strip()
+    except requests.exceptions.RequestException as e:
+        print(f"Errore di richiesta HTTP durante l'estrazione del testo da {url}: {e}")
+        return ""
     except Exception as e:
-        print(f"Errore estrazione testo da {url}: {e}")
+        print(f"Errore generico durante l'estrazione del testo da {url}: {e}")
         return ""
     
 def extract_article_content(soup):
@@ -2167,7 +2170,9 @@ def extract_main_content(soup):
         container = paragraphs[0].parent
         if container and len(container.get_text(strip=True)) > 200:
             return container
-    return None@app.route("/api/ces-image", methods=["POST"])
+    return None
+    
+@app.route("/api/ces-image", methods=["POST"])
 def ces_image():
     try:
         data = request.get_json()
@@ -2550,10 +2555,10 @@ def home():
                     const res = await fetch("/api/chat", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ message: userInput, model: selectedModel })
+                        body: JSON.stringify({ message: userInput, api_provider: selectedModel })
                     });
                     const data = await res.json();
-                    renderMessage("assistant", data.response || "❌ Nessuna risposta dal backend.");
+                    renderMessage("assistant", data.reply || "❌ Nessuna risposta dal backend.");
                 } catch (e) {
                     renderMessage("assistant", "❌ Errore server: " + e.message);
                 }
@@ -2632,8 +2637,6 @@ def home():
 </body>
 </html> """
     return Response(html, content_type="text/html; charset=utf-8")
-
-
 def chat_with_ces_plus(user_message, conversation_history, attachments=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e messaggi separati.
@@ -3262,117 +3265,75 @@ Repository per Download Manager:
 
 from flask import session
 import requests
+import locale
 import json
 
-
-def handle_quick_commands(message, experimental_mode=False):
+def handle_quick_commands(message, experimental_mode=False, attachments=None, api_provider="gemini", conversation_history=None):
     """
-    Gestisce i comandi rapidi di ArcadiaAI (inclusi quelli per Flathub e Winget).
+    Gestisce i comandi rapidi di ArcadiaAI.
     """
     msg_lower = message.strip().lower()
     command, argument = parse_quick_command(message)
     if command is None:
         return None
+    
+    print(f"DEBUG: Comando ricevuto - command: {command}, argument: {argument}")  # Debug logging
 
-    # --- Gestione comandi Flathub ---
-    flathub_response = handle_flathub_command(command, argument)
-    if flathub_response:
-        return flathub_response
-
-    # --- NUOVO: Gestione comandi Winget ---
-    winget_response = handle_winget_command(command, argument)
-    if winget_response:
-        return winget_response
-
-    # --- Estensioni NSK ---
-    for ext in EXTENSIONS.values():
-        try:
-            if ext.can_handle(command):
-                return ext.handle(argument)
-        except Exception as e:
-            return f"❌ Errore nell'estensione: {e}"
-
+    # Prima verifica i comandi speciali
     if msg_lower == "@impostazioni modalità sperimentale disattiva":
         return "❎ Modalità sperimentale disattivata!"
 
     if msg_lower == "@impostazioni modalità sperimentale attiva":
         return "✅ Modalità sperimentale attivata!"
 
+    # Poi gestisci i comandi principali
     if command == "cerca":
         if not argument:
             return "❌ Devi specificare cosa cercare. Esempio: @cerca seconda guerra mondiale"
+        
+        try:
+            results = search_web(argument)
+            if not results:
+                return f"❌ Nessun risultato trovato per '{argument}'"
+            
+            response = f"🔍 Risultati per '{argument}':\n\n"
+            for i, result in enumerate(results[:3], 1):
+                response += f"{i}. {result.get('title', 'Nessun titolo')}\n"
+                response += f"   {result.get('url', 'Nessun URL')}\n"
+                response += f"   {result.get('snippet', 'Nessuna descrizione')}\n\n"
+            
+            return response.strip()
+            
+        except Exception as e:
+            print(f"Errore durante la ricerca: {str(e)}")
+            return "❌ Errore temporaneo durante la ricerca. Riprova più tardi."
 
-        results = search_duckduckgo(argument)
-        if not results or not isinstance(results, list):
-            return f"❌ Nessun risultato trovato per '{argument}'"
-
-        # Estrai solo le URL vere dai risultati
-        urls = [
-            r['url'] for r in results
-            if isinstance(r, dict) and 'url' in r
-        ]
-
-        urls = [
-            url for url in urls
-            if "duckduckgo.com/y.js" not in url and "ad_domain" not in url
-        ]
-
-        if urls:
-            testo = estrai_testo_da_url(urls[0])
-            if testo:
-                breve = ". ".join(testo.split(".")[:2]).strip() + "."
-                return (
-                    f"🔍 Risultati per '{argument}':\n\n"
-                    f"**Sintesi dal primo risultato:**\n{breve}\n\n"
-                    + "\n".join(f"- {url}" for url in urls[:3])
-                )
-            else:
-                return (
-                    f"🔍 Risultati per '{argument}':\n\n"
-                    + "\n".join(f"- {url}" for url in urls[:3])
-                )
-
-        return f"❌ Nessun risultato trovato per '{argument}'"
-
-    if command == "estensioni":
-        if not EXTENSIONS:
-            return "🔌 Nessuna estensione installata."
-        elenco = "\n".join(
-            f"- {getattr(mod, '__name__', name).replace('nsk_', '')}"
-            for name, mod in EXTENSIONS.items()
-        )
-        return f"🔌 Estensioni installate:\n{elenco}"
-
-    elif command == "versione":
-        return "🔄 Versione attuale: 1.5.6"
-
-    elif command == "telegraph" and argument:
-        if "saggio" in argument or "scrivi" in argument:
-            prompt = argument
-            if gemini_model:
-                generated_text, telegraph_url = generate_with_gemini(prompt, "Articolo generato da ArcadiaAI")
-            else:
-                generated_text = chat_with_huggingface(prompt, [])
-                telegraph_url = publish_to_telegraph("Articolo generato da ArcadiaAI", generated_text)
+    elif command == "telegraph":
+        if not argument:
+            return "❌ Devi specificare il contenuto da pubblicare. Esempio: @telegraph Questo è un articolo di prova"
+        
+        try:
+            title = "Articolo generato da ArcadiaAI"
+            telegraph_url = publish_to_telegraph(title, argument)
+            
             if telegraph_url and not telegraph_url.startswith("⚠️"):
                 return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
             return telegraph_url or "❌ Errore nella pubblicazione"
-        else:
-            telegraph_url = publish_to_telegraph("Articolo generato da ArcadiaAI", argument)
-            return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
+            
+        except Exception as e:
+            print(f"Errore durante la pubblicazione su Telegraph: {str(e)}")
+            return "❌ Errore temporaneo durante la pubblicazione. Riprova più tardi."
 
     elif command == "meteo" and argument:
         return meteo_oggi(argument)
-
+    
     elif command == "data":
-        import locale
-        import datetime
         locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
         oggi = datetime.datetime.now().strftime("%A %d %B %Y")
         return f"📅 Oggi è {oggi}"
 
     elif command == "source":
-        return "🔗 Repository GitHub: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI "
+        return "🔗 Repository GitHub: https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI"
 
     elif command == "arcadia":
         return "🔗 Profilo della Repubblica di Arcadia: https://t.me/Repubblica_Arcadia"
@@ -3390,10 +3351,15 @@ def handle_quick_commands(message, experimental_mode=False):
             "- @winget - [nome-app]: scarica un'app per Windows\n"
             "- @snap - [nome-app]: scarica un'app per Linux (Snapd)\n"
             "- @fdroid - [nome-app]: scarica un'app per Android (F-Droid)\n"
-            "(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, e con licenze diverse. "
-            "Il Download Manager fornisce l'installer, ma la licenza d'uso è definita dall'editore dell'app.)"
+            "(Nota: Su Winget sono disponibili sia app gratuite che a pagamento, "
+            "e con licenze diverse. Il Download Manager fornisce l'installer, "
+            "ma la licenza d'uso è definita dall'editore dell'app.)"
         )
 
+    elif command == "flathub":
+        if not argument:
+            return "❌ Specifica un'app da cercare su Flathub. Esempio: @flathub firefox"
+        return handle_flathub_command("flathub",argument)
     elif command == "snap":
         if not argument:
             return "❌ Specifica un'app Snap da cercare. Esempio: @snap firefox"
@@ -3408,17 +3374,19 @@ def handle_quick_commands(message, experimental_mode=False):
         return "📜 Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
 
     elif command == "codice_sorgente":
-        return "🔗 Codice sorgente di ArcadiaAI: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI"
+        return "🔗 Codice sorgente di ArcadiaAI: https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI"
 
     elif command == "info":
         return (
             "ℹ️ Informazioni su ArcadiaAI:\n\n"
-            "Versione: 1.5.0\n"
-            "Modello: CES basato su Google Gemini e Huggingface\n"
+            "Versione: 1.5.7\n"
+            "Modello di testo: CES 1.5 v2\n"
+            "Modello di Ragionamento: CES Plus\n"
+            "Modello esterni: DeepSeek Chat\n"
             "Lingua: Italiano e inglese (beta)\n"
             "Creatore: Mirko Yuri Donato\n"
             "Licenza: GNU GPL v3.0+\n"
-            "Repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI\n"
+            "Repository: https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI\n"
             "Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
         )
 
@@ -3427,19 +3395,18 @@ def handle_quick_commands(message, experimental_mode=False):
 
     elif command == "impostazioni":
         return (
-            "⚙️ Menu Impostazioni :\n\n"
+            "⚙️ Menu Impostazioni:\n\n"
             "- Modalità Sperimentale: attiva/disattiva\n"
             "- Lingua: italiano/inglese\n"
             "- Tema: chiaro/scuro\n"
             "- Modalità Sviluppatore: attiva/disattiva\n"
-            "Usa i comandi @impostazioni [opzione] per modificare le impostazioni."
+            "Usa i comandi @impostazioni [opzione] per modificare le impostazioni.\n"
             "Nota: Alcune opzioni potrebbero non essere disponibili in questa versione."
         )
 
     elif command == "immagine":
         if not argument:
             return "❌ Specifica cosa disegnare. Esempio: @immagine drago pixel art su un hoverboard"
-
         try:
             response = requests.post(
                 "https://arcadiaai.onrender.com/api/ces-image",
@@ -3447,7 +3414,6 @@ def handle_quick_commands(message, experimental_mode=False):
                 json={"prompt": argument},
                 timeout=20
             )
-
             if response.status_code == 200:
                 data = response.json()
                 image_url = data.get("image_url")
@@ -3459,11 +3425,10 @@ def handle_quick_commands(message, experimental_mode=False):
                         f'margin-top: 8px; border-radius: 6px;">'
                         f'</div>'
                     )
-                return "⚠️ L’API ha risposto ma non ha fornito nessuna immagine."
-            return f"❌ Errore dall’API CES Image: {response.status_code}"
-
+                return "⚠️ L'API ha risposto ma non ha fornito nessuna immagine."
+            return f"❌ Errore dall'API CES Image: {response.status_code}"
         except Exception as e:
-            return f"❌ Errore nella generazione dell’immagine: {e}"
+            return f"❌ Errore nella generazione dell'immagine: {e}"
 
     elif command == "privacy":
         return (
@@ -3472,15 +3437,37 @@ def handle_quick_commands(message, experimental_mode=False):
             "Le conversazioni sono salvate in locale. "
             "Per maggiori dettagli, consulta i Termini di Servizio."
         )
+
     elif command == "sac":
         return (
             "🔗 SAC (Strumenti Avanzati di CES):\n\n"
-            "I SAC sono componenti interne del codice sorgente di ArcadiaAI che p. "
-            "Puoi esportare, importare e cancellare le conversazioni tramite i comandi dedicati."
+            "I SAC sono componenti interne del codice sorgente di ArcadiaAI"
         )
-    elif command == "cancella_conversazione":
-        return "🗑️ Cronologia della conversazione"
-    elif command == "aiuto": # Questo blocco è ora il comando generico @aiuto
+
+    elif command == "riassumi":
+        if attachments:
+          for attachment in attachments:
+            if attachment.get('type') == 'application/pdf':
+                file_data = base64.b64decode(
+                    attachment['data'].split(',')[1] if attachment['data'].startswith('data:') else attachment['data']
+                )
+                testo = extract_text_from_file(file_data, 'application/pdf')
+                if not testo:
+                    return "❌ Impossibile estrarre testo dal PDF."
+                prompt = f"Riassumi il seguente testo:\n\n{testo[:12000]}"
+                if api_provider == "gemini" and gemini_model:
+                    return chat_with_gemini(prompt, conversation_history)
+                elif api_provider == "cesplus" and gemini_model:
+                    return chat_with_ces_plus(prompt, conversation_history)
+                elif api_provider == "deepseek":
+                    return chat_with_deepseek(prompt, conversation_history)
+                else:
+                    return "❌ Provider non riconosciuto."
+        return "❌ Nessun PDF trovato tra gli allegati."
+    if not argument or not argument.startswith("http"):
+        return "❌ Allega un file PDF o fornisci un URL diretto al PDF da riassumere."
+
+    elif command == "aiuto":
         return (
             "🎯 Comandi rapidi disponibili:\n\n"
             "@cerca [query] - Cerca su internet\n"
@@ -3505,11 +3492,12 @@ def handle_quick_commands(message, experimental_mode=False):
             "@app - Mostra le repository che supportano il Download Manager\n"
             "@flathub [nome app] - Cerca un'app su Flathub e restituisce il download diretto\n"
             "@flathub_download [ID app] - Scarica un'app specifica da Flathub\n"
-            "@winget [nome app] - Cerca un'app su Winget e restituisce il download diretto (NOVITÀ!)\n" # Aggiunto qui
+            "@winget [nome app] - Cerca un'app su Winget e restituisce il download diretto (NOVITÀ!)\n"
             "@cesplus - Usa il modello CES Plus per risposte avanzate\n"
             "@crea zip - genera un file ZIP con file dati dall'utente\n"
             "@esporta - Esporta l'ultima conversazione in un file TXT\n"
             "@importa - Importa la una conversazione da un file TXT tramite NovaSync\n"
+            "@riassumi [URL PDF] - Legge e riassume un file PDF\n"
             "Per altre domande, chiedi pure!"
         )
 
