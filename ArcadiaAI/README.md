@@ -51,7 +51,7 @@ Benvenuto in ArcadiaAI! Sei pronto a esplorare il futuro dell'intelligenza artif
 Per un'esperienza immediata, puoi accedere ad ArcadiaAI direttamente tramite il tuo browser. Non è necessario installare nulla:
 
 1.  **Visita il nostro sito web:** [qui](https://arcadiaai.netlify.app/)
-2.  **Scegli il tuo modello preferito:** Seleziona tra i nostri moduli disponibili, come **CES 1.5** per un'esperienza generale o **CES 360** per interazioni più avanzate.
+2.  **Scegli il tuo modello preferito:** Seleziona tra i nostri moduli disponibili, come **CES 1.5** per un'esperienza generale o **CES Plus** per interazioni più avanzate.
 3.  **Inizia a chattare!** Digita le tue domande o richieste e scopri la potenza di ArcadiaAI.
 
 ### 🛠️ Esegui ArcadiaAI Localmente (per sviluppatori)
