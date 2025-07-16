@@ -65,4 +65,3 @@ jobs:
     - name: Check HTML syntax (HTMLHint, if configured)
       working-directory: Sito web/
       run: |
-        # Esegui il tuo comando per il linting HTML qui
