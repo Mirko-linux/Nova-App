@@ -127,7 +127,10 @@ if CES_PLUS_API:
         print(f"❌ Errore configurazione CES Plus (Gemini 2.5 Flash): {str(e)}")
         ces_plus_model = None
 
+
+# Dizionario delle risposte predefinite e trigger_phrases (lasciato invariato)
 risposte = {
+    # ... il tuo lungo dizionario delle risposte ...
     "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
     "cosa sai fare": "Posso aiutarti a scrivere saggi, fare ricerche e rispondere a tutto ciò che mi chiedi. Inoltre, posso pubblicare contenuti su Telegraph!",
     "chi è tobia testa": "Tobia Testa (anche noto come Tobia Teseo) è un micronazionalista leonense noto per la sua attività nella Repubblica di Arcadia, ma ha anche rivestito ruoli fondamentali a Lumenaria.",
@@ -173,6 +176,7 @@ risposte = {
     "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
 }
 
+# Trigger per le risposte predefinite
 trigger_phrases = {
     "chi sei": ["chi sei", "chi sei tu", "tu chi sei", "presentati", "come ti chiami", "qual è il tuo nome"],
     "cosa sai fare": ["cosa sai fare", "cosa puoi fare", "funzionalità", "capacità", "a cosa servi", "in cosa puoi aiutarmi"],
@@ -351,6 +355,7 @@ def publish_to_telegraph(title, content):
         print(f"Errore pubblicazione Telegraph: {str(e)}")
         return f"⚠️ Errore durante la pubblicazione: {str(e)}"
 
+# Funzione per generare contenuti con Gemini (CES 1.5)
 def generate_with_gemini(prompt, title):
     """Genera contenuti con Gemini e pubblica su Telegraph."""
     if not gemini_model:
@@ -411,7 +416,16 @@ def extract_text_from_file(file_data, mime_type):
                     if page_text.strip(): # Se c'è testo estraibile
                         text += page_text + "\n"
                     else:
+                        # Qui la pagina è probabilmente un'immagine. 
+                        # Per un OCR completo e funzionante, dovresti installare un motore OCR come Tesseract 
+                        # e usare un wrapper come pytesseract con PyMuPDF per estrarre l'immagine e poi OCRizzarla.
+                        # Per ora, stamperemo solo un messaggio di debug.
                         print(f"DEBUG: Pagina {i+1} del PDF probabilmente scansionata, nessun testo diretto estraibile. Richiede OCR.")
+                        # Esempio concettuale di come faresti con OCR (richiede più setup!)
+                        # pix = page.get_pixmap()
+                        # img_bytes = pix.pil_tobytes(format="PNG") # Richiede Pillow
+                        # text += pytesseract.image_to_string(Image.open(io.BytesIO(img_bytes))) + "\n" # Richiede pytesseract e Pillow
+
                 doc.close() # Chiudi il documento dopo l'elaborazione
 
                 if not text.strip():
@@ -464,6 +478,7 @@ def handle_fallback(query):
         except:
             pass
     
+    # Risposte preconfigurate
     fallback_responses = {
         "ciao": "Ciao! Sono ArcadiaAI, come posso aiutarti?",
         "2+2": "4",
@@ -480,37 +495,42 @@ def generate_audio_from_text(text_to_speak, output_filename="output.mp3"):
 
     synthesis_input = texttospeech.SynthesisInput(text=text_to_speak)
 
+    # Configura la voce (es. italiano, donna, standard)
     voice = texttospeech.VoiceSelectionParams(
         language_code="it-IT",
         ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
     )
 
+    # Configura il tipo di audio
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3
     )
 
     try:
+        # Esegui la richiesta di sintesi
         response = client.synthesize_speech(
             input=synthesis_input, voice=voice, audio_config=audio_config
         )
 
+        # Salva l'audio in un file
         with open(output_filename, "wb") as out:
             out.write(response.audio_content)
             print(f'Audio content written to file "{output_filename}"')
         return True # Indica successo
     except Exception as e:
         print(f"ERRORE SINTESI VOCALE: {type(e).__name__} - {e}")
-        return False 
+        return False # Indica fallimento
     
+# Aggiungi queste funzioni utility nello stesso file (prima della route /chat)
 def render_canvas_html(canvas_data):
     """Genera HTML dal canvas data"""
     try:
         elements_html = ""
-        for element in canvas_data.get('elementi', []):  
-            style = f"position:absolute; left:{element['posizione']['x']}px; top:{element['posizione']['y']}px;"
+        for element in canvas_data.get('elementi', []):  # Cambiato da 'elements' a 'elementi'
+            style = f"position:absolute; left:{element['posizione']['x']}px; top:{element['posizione']['y']}px;"  # Cambiato da 'position' a 'posizione'
             
             if element['tipo'] == 'testo':  # Cambiato da 'type' a 'tipo'
-                content = f"<div style='{style} padding:8px; border-radius:4px; background:#fff;'>{element['contenuto']}</div>"  
+                content = f"<div style='{style} padding:8px; border-radius:4px; background:#fff;'>{element['contenuto']}</div>"  # Cambiato da 'content' a 'contenuto'
             elif element['tipo'] == 'codice':
                 content = f"<pre style='{style} background:#f5f5f5; padding:10px; border-radius:4px;'>{element['contenuto']}</pre>"
             elif element['tipo'] == 'grafico':
@@ -554,12 +574,15 @@ def export_to_telegraph(canvas_data):
 def salva_canvas_locale(canvas_data):
     """Salva il canvas come file locale"""
     try:
+        # Crea directory se non esiste
         save_dir = os.path.join(current_app.root_path, 'saved_canvases')
         os.makedirs(save_dir, exist_ok=True)
         
+        # Genera nome file
         filename = f"canvas_{canvas_data['id']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = os.path.join(save_dir, filename)
         
+        # Salva il file
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(canvas_data, f, ensure_ascii=False, indent=2)
         
@@ -933,9 +956,11 @@ def genera_mappa(args):
         
     lat, lon = coords['lat'], coords['lon']
     
+    # URL corretti e verificati
     map_url = f"https://www.openstreetmap.org/#map=15/{lat}/{lon}"
     static_url = f"https://maps.wikimedia.org/osm-intl/15/{lat}/{lon}.png"
     
+    # Codice HTML per Telegram o plaintext per altri client
     return (
         f"🗺️ <b>Mappa di {coords['display_name']}</b>\n"
         f"📍 Coordinate: {lat}, {lon}\n\n"
@@ -945,7 +970,14 @@ def genera_mappa(args):
         f"Interattiva: {map_url}\n"
         f"Anteprima: {static_url}"
     )
+import os
+import re
+import traceback
+import logging
+from flask import request, jsonify
+from datetime import datetime
 
+# Configurazione logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -954,6 +986,7 @@ logger = logging.getLogger(__name__)
 def chat_route():
     """Endpoint principale per le richieste di chat con gestione avanzata degli errori e supporto allegati."""
     try:
+        # Verifica presenza dati JSON
         if not request.is_json:
             logger.warning("Richiesta senza JSON")
             return jsonify({"reply": "❌ Formato non supportato. Usa application/json"}), 400
@@ -961,6 +994,7 @@ def chat_route():
         data = request.get_json()
         logger.info(f"Dati ricevuti: {data}")
 
+        # Estrazione parametri con valori di default
         message = data.get("message", "").strip()
         user_id = data.get("user_id", "default")
         experimental_mode = data.get("experimental_mode", False)
@@ -969,6 +1003,7 @@ def chat_route():
         attachments = data.get("attachments", [])
         msg_lower = message.lower()
 
+        # Validazione parametri
         if not isinstance(conversation_history, list):
             logger.error("Storia conversazione non valida")
             return jsonify({"reply": "❌ Formato storia conversazione non valido"}), 400
@@ -977,12 +1012,14 @@ def chat_route():
         processed_attachments = []
         for attachment in attachments:
             try:
+                # Estrai metadati base
                 file_data = attachment.get('data')
                 file_name = attachment.get('name', 'file_senza_nome')
                 mime_type = attachment.get('type', 'application/octet-stream')
 
                 logger.info(f"Elaborazione allegato: {file_name} ({mime_type})")
 
+                # Decodifica i dati base64 se presenti
                 if isinstance(file_data, str) and file_data.startswith('data:'):
                     file_data = file_data.split(',')[1]  # Rimuovi il prefisso
 
@@ -1096,8 +1133,10 @@ def chat_with_deepseek(message, conversation_history=None, attachments=None):
         timeout=20.0
     )
 
+    # Preparazione messaggi (comune a tutti i modelli)
     messages = prepare_messages(message, conversation_history, attachments)
     
+    # Lista dei modelli da provare in ordine
     models_to_try = [
         "deepseek/deepseek-r1:free",  # Prima scelta
         "deepseek/deepseek-v3:free"   # Fallback
@@ -1134,6 +1173,7 @@ def chat_with_deepseek(message, conversation_history=None, attachments=None):
             print(last_error)
             continue
 
+    # Se tutti i modelli falliscono
     error_msg = last_error if last_error else "Errore sconosciuto"
     print(f"❌ Tutti i modelli falliti. Ultimo errore: {error_msg}")
     return f"⚠️ Errore temporaneo. Riprova più tardi. (Codice: DS_{hash(error_msg) % 10000})"
@@ -1145,12 +1185,14 @@ def prepare_messages(message, conversation_history, attachments):
         "content": "Sei ArcadiaAI. Risposte concise in italiano. Creato da Mirko Yuri Donato."
     }]
     
+    # Aggiunta cronologia
     if conversation_history:
         messages.extend([
             msg for msg in conversation_history[-10:] 
             if isinstance(msg, dict) and msg.get("content")
         ])
     
+    # Aggiunta allegati
     if attachments:
         message += "\n[Allegati]: " + process_attachments(attachments)
     
@@ -1204,6 +1246,7 @@ Linee guida:
 
   
     try:
+        # 1. PRIMA: controlla se è un comando rapido
         command, argument = parse_quick_command(user_message)
         if command:
             quick_reply = handle_quick_commands(
@@ -1215,6 +1258,7 @@ Linee guida:
             if quick_reply is not None:
                 return quick_reply
 
+        # 2. SOLO SE NON È UN COMANDO, verifica risposte predefinite
         cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
         for key, phrases in trigger_phrases.items():
             if any(phrase in cleaned_msg for phrase in phrases):
@@ -1535,7 +1579,7 @@ def format_conversation_history(history):
         return "Nessuna cronologia precedente"
     
     formatted = []
-    for msg in history[-6:]:  
+    for msg in history[-6:]:  # Usa solo gli ultimi 6 messaggi per evitare prompt troppo lunghi
         if isinstance(msg, dict):
             role = "Utente" if msg.get("role") == "user" else "Assistente"
             content = msg.get("message", "").strip()
@@ -1634,9 +1678,12 @@ Comandi disponibili:
 /help_commands - Comandi disponibili"""
     await update.message.reply_text(help_text)
 
+# Poi definisci le funzioni di avvio
 async def run_telegram_bot_async():
-    application = Application.builder().token(TELEGRAM_TOKEN).build()    
-    application.updater = None 
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    # Aggiungi questo per gestire meglio gli aggiornamenti
+    application.updater = None  # Disabilita l'updater predefinito
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", start))
@@ -1645,7 +1692,7 @@ async def run_telegram_bot_async():
     print("🤖 Bot Telegram avviato!")
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()  
+    await application.updater.start_polling()  # Avvia esplicitamente il polling
     
     try:
         while True:
@@ -1685,6 +1732,8 @@ def run_telegram_bot():
         except Exception as cleanup_error:
             print(f"⚠️ Errore nella pulizia dell'event loop: {cleanup_error}")
         
+
+# Dizionario delle risposte predefinite
 risposte = {
     "chi sei": "Sono ArcadiaAI, un chatbot libero e open source, creato da Mirko Yuri Donato.",
     "cosa sai fare": "Posso aiutarti a scrivere saggi, fare ricerche e rispondere a tutto ciò che mi chiedi. Inoltre, posso pubblicare contenuti su Telegraph!",
@@ -1731,6 +1780,7 @@ risposte = {
     "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
 }
 
+# Trigger per le risposte predefinite
 trigger_phrases = {
     "chi sei": ["chi sei", "chi sei tu", "tu chi sei", "presentati", "come ti chiami", "qual è il tuo nome"],
     "cosa sai fare": ["cosa sai fare", "cosa puoi fare", "funzionalità", "capacità", "a cosa servi", "in cosa puoi aiutarmi"],
@@ -1835,6 +1885,7 @@ def load_nsk_extensions():
     print("Estensioni caricate:", list(EXTENSIONS.keys()))
 load_nsk_extensions()
 
+# Funzione per pubblicare su Telegraph
 def publish_to_telegraph(title, content):
     """Pubblica contenuti su Telegraph."""
     url = "https://api.telegra.ph/createPage"
@@ -1864,6 +1915,7 @@ def publish_to_telegraph(title, content):
         print(f"Errore pubblicazione Telegraph: {str(e)}")
         return f"⚠️ Errore durante la pubblicazione: {str(e)}"
 
+# Funzione per generare contenuti con Gemini (CES 1.5)
 def generate_with_gemini(prompt, title):
     """Genera contenuti con Gemini e pubblica su Telegraph."""
     if not gemini_model:
@@ -1945,26 +1997,110 @@ def extract_main_content(soup):
         return main_content
     return soup.body
 
+def detect_context_and_apply_bang(query):
+    """
+    Analizza la query e applica i !bang di DuckDuckGo più pertinenti in base al contesto
+    Restituisce la query modificata con il !bang appropriato
+    """
+    query_lower = query.lower()
+    bang_mappings = {
+        # Ristoranti e locali
+        'ristorante': '!tripadvisor',
+        'trattoria': '!tripadvisor',
+        'pizzeria': '!tripadvisor',
+        'osterie': '!tripadvisor',
+        'dove mangiare': '!tripadvisor',
+        'miglior ristorante': '!tripadvisor',
+        
+        # Hotel e alloggi
+        'hotel': '!booking',
+        'albergo': '!booking',
+        'bed and breakfast': '!booking',
+        'dormire a': '!booking',
+        'affittacamere': '!booking',
+        'ostello': '!booking',
+        
+        # Trasporti
+        'volo': '!skyscanner',
+        'treno': '!rome2rio',
+        'autobus': '!rome2rio',
+        'come arrivare a': '!rome2rio',
+        'mezzi pubblici': '!rome2rio',
+        'navigazione': '!rome2rio',
+        
+        # E-commerce
+        'acquistare': '!amazon',
+        'comprare': '!amazon',
+        'prezzo di': '!amazon',
+        'recensione prodotto': '!amazon',
+        
+        # Video
+        'video di': '!youtube',
+        'youtube': '!youtube',
+        'tutorial': '!youtube',
+        'come fare': '!youtube'
+    }
+    
+    # Cerca corrispondenze nei mapping
+    for keyword, bang in bang_mappings.items():
+        if keyword in query_lower:
+            # Se la query non ha già un !bang
+            if not any(b in query_lower for b in ['!', '!bang', '!youtube', '!amazon']):
+                return f"{bang} {query}"
+    
+    return query
+
 def search_web(query, lang="it-IT"):
+    """
+    Funzione principale di ricerca con supporto per !bang automatici
+    e fallback su Brave se necessario
+    """
     try:
-        ddg_results = search_duckduckgo(query, lang)
-
-        if not ddg_results or len(ddg_results) < 3:
-            print("DEBUG: Pochi risultati da DDG, tentativo con Brave.")
-            brave_results = search_brave(query, lang)
-            results = (ddg_results or []) + (brave_results or [])
+        # 1. Analisi contestuale e applicazione !bang
+        processed_query = detect_context_and_apply_bang(query)
+        print(f"DEBUG: Query processata - {processed_query}")
+        
+        # 2. Prima ricerca con DuckDuckGo (con eventuale !bang)
+        ddg_results = search_duckduckgo(processed_query, lang)
+        print(f"DEBUG: DuckDuckGo trovati {len(ddg_results)} risultati")
+        
+        # 3. Se pochi risultati, prova senza !bang (solo se ne avevamo aggiunto uno)
+        if len(ddg_results) < 3 and processed_query != query:
+            print("DEBUG: Pochi risultati con !bang, provo senza")
+            ddg_results = search_duckduckgo(query, lang)
+            print(f"DEBUG: DuckDuckGo (senza !bang) trovati {len(ddg_results)} risultati")
+        
+        # 4. Se ancora pochi risultati, prova con Brave
+        if len(ddg_results) < 3:
+            print("DEBUG: Pochi risultati da DDG, provo Brave")
+            brave_results = search_brave(query, lang)  # Usa la query originale per Brave
+            print(f"DEBUG: Brave trovati {len(brave_results)} risultati")
+            
+            # Combina i risultati, eliminando duplicati
+            combined_results = ddg_results + [
+                r for r in brave_results 
+                if r['url'] not in [d['url'] for d in ddg_results]
+            ]
         else:
-            results = ddg_results
-
-        filtered = filter_results(results, query)
+            combined_results = ddg_results
+        
+        # 5. Filtraggio e verifica risultati
+        filtered = filter_results(combined_results, query)
         verified = verify_results(filtered)
-
+        
         return verified[:3]
+        
     except Exception as e:
-        print(f"Errore generale nella funzione search_web: {str(e)}")
+        print(f"Errore in search_web: {e}")
         return []
-
+    
 def search_duckduckgo(query, lang):
+    """
+    Ricerca su DuckDuckGo con supporto per !bang
+    """
+    # Pulisci la query da eventuali doppi spazi
+    query = ' '.join(query.split())
+    
     url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}&kl={lang[:2]}-{lang[-2:]}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1975,40 +2111,46 @@ def search_duckduckgo(query, lang):
         res = requests.get(url, headers=headers, timeout=12)
         res.raise_for_status()
 
-        print("DEBUG HTML DDG (primi 1000 caratteri):", res.text[:1000])
-
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
 
-        for result_div in soup.select('div.result, div.web-result'):
-            link_tag = result_div.find('a', class_='result__a')
-            if link_tag and 'href' in link_tag.attrs:
-                href = extract_real_url(link_tag['href'])
-                if href:
-                    title = link_tag.get_text(strip=True)
-
-                    snippet_tag = result_div.find('div', class_='result__body')
-                    if not snippet_tag:
-                        snippet_tag = result_div.find('a', class_='result__snippet')
-
-                    snippet_text = snippet_tag.get_text(' ', strip=True) if snippet_tag else ""
-
-                    if title or snippet_text:
+        # Gestione speciale per alcuni !bang
+        if query.startswith(('!youtube', '!amazon', '!booking')):
+            # Per questi siti, estrai risultati diretti
+            for result in soup.select('.result, .web-result'):
+                link = result.find('a')
+                if link and link.get('href'):
+                    href = extract_real_url(link['href'])
+                    if href and any(d in href for d in ['youtube.com', 'amazon.', 'booking.com']):
+                        title = link.get_text(strip=True)
+                        snippet = result.find('div', class_='result__snippet') or ''
                         results.append({
                             'url': href,
                             'title': title,
-                            'snippet': snippet_text,
+                            'snippet': snippet.get_text(' ', strip=True) if snippet else "",
                             'source': 'duckduckgo'
                         })
-        print(f"DEBUG: Trovati {len(results)} risultati da DuckDuckGo.")
-        return results[:5]
-    except requests.exceptions.RequestException as e:
-        print(f"Errore nella richiesta HTTP a DuckDuckGo: {e}")
-        return []
-    except Exception as e:
-        print(f"Errore generico in search_duckduckgo: {e}")
-        return []
+        else:
+            # Parsing standard per altri risultati
+            for result in soup.find_all('div', class_='web-result'):
+                link = result.find('a', class_='result__a')
+                if link:
+                    href = extract_real_url(link.get('href', ''))
+                    if href:
+                        title = link.get_text(strip=True)
+                        snippet = result.find('a', class_='result__snippet') or result.find('div', class_='result__snippet')
+                        results.append({
+                            'url': href,
+                            'title': title,
+                            'snippet': snippet.get_text(' ', strip=True) if snippet else "",
+                            'source': 'duckduckgo'
+                        })
 
+        return results[:5]
+    except Exception as e:
+        print(f"Errore in search_duckduckgo: {e}")
+        return []
+        
 def search_brave(query, lang):
     url = f"https://search.brave.com/search?q={urllib.parse.quote(query)}&lr=lang_{lang[:2]}"
     headers = {
@@ -2020,36 +2162,35 @@ def search_brave(query, lang):
         res = requests.get(url, headers=headers, timeout=12)
         res.raise_for_status()
 
-        print("DEBUG HTML Brave (primi 1000 caratteri):", res.text[:1000])
-
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
 
-        for result_div in soup.select('.result'):
-            link_tag = result_div.find('a')
-            if link_tag and link_tag.has_attr('href'):
-                href = extract_real_url(link_tag['href'])
-                if href:
-                    title = link_tag.get_text(strip=True)
-                    snippet_tag = result_div.find(class_='snippet-content')
-                    snippet_text = snippet_tag.get_text(' ', strip=True) if snippet_tag else ""
+        # Nuovi selettori per Brave (aggiornati)
+        for result in soup.select('.result, .card'):
+            link = result.find('a')
+            if not link or not link.has_attr('href'):
+                continue
 
-                    if title or snippet_text:
-                        results.append({
-                            'url': href,
-                            'title': title,
-                            'snippet': snippet_text,
-                            'source': 'brave'
-                        })
-        print(f"DEBUG: Trovati {len(results)} risultati da Brave.")
+            href = link['href']
+            if href.startswith('/search?q='):
+                continue  # Ignora link interni
+
+            title = link.get_text(strip=True)
+            snippet = result.select_one('.snippet-content, .snippet-description')
+            snippet_text = snippet.get_text(' ', strip=True) if snippet else ""
+
+            results.append({
+                'url': href,
+                'title': title,
+                'snippet': snippet_text,
+                'source': 'brave'
+            })
+
         return results[:5]
-    except requests.exceptions.RequestException as e:
-        print(f"Errore nella richiesta HTTP a Brave: {e}")
-        return []
     except Exception as e:
-        print(f"Errore generico in search_brave: {str(e)}")
+        print(f"Errore in search_brave: {e}")
         return []
-
+    
 def extract_real_url(href):
     if href.startswith('http'):
         return href
@@ -2103,6 +2244,24 @@ def verify_results(results):
             print(f"DEBUG: Errore generico durante la verifica per {result['url']}: {e}")
 
     return verified or results[:3]
+
+def extract_real_url(href):
+    if not href:
+        return None
+    
+    # Caso standard: URL diretto
+    if href.startswith(('http://', 'https://')):
+        return href
+    
+    # Caso DuckDuckGo redirect
+    if href.startswith(('/l/?uddg=', '//duckduckgo.com/l/?uddg=')):
+        try:
+            redirect_url = href.split('uddg=')[1].split('&')[0]
+            return urllib.parse.unquote(redirect_url)
+        except:
+            return None
+    
+    return None
 
 def extract_content(url):
     headers = {
