@@ -53,7 +53,7 @@ In questi casi, **le tue richieste vengono elaborate da Google**, come descritto
 
 Adottiamo misure ragionevoli per proteggere i dati gestiti.  
 Tuttavia, nessuna trasmissione via Internet è sicura al 100%.  
-🔒 Ti raccomandiamo di non condividere **dati sensibili** nel chatbot.
+ Ti raccomandiamo di non condividere **dati sensibili** nel chatbot.
 
 ---
 
