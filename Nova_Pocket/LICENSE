@@ -1,48 +1,66 @@
 NOVA SURF PUBLIC LICENSE (NSPL)
+
 Versione 1.0
 
-1. DEFINIZIONI
+Questa licenza definisce i termini per l'utilizzo, la modifica e la distribuzione del software licenziato sotto NSPL.
 
-1.1. "Licenziante": L'individuo o l'ente che distribuisce il software sotto questa licenza.  
-1.2. "Software": Il codice sorgente, i binari o altri materiali coperti da NSPL.  
-1.3. "Uso Commerciale": Qualsiasi utilizzo da parte di aziende, organizzazioni o privati a scopo di lucro, escluse donazioni.  
-1.4. "Componenti Proprietari": Parti del Software non open source, se presenti.  
+1. Definizioni
 
-2. DIRITTI CONCESSI
+    Licenziante: L'individuo o l'entità che concede questa licenza.
 
-2.1. È permesso:  
-   - Usare, modificare e ridistribuire il Software sotto NSPL o MPL 2.0+.  
-   - Integrare il Software con codice sotto MIT, Apache 2.0 o licenze permissive simili (ma la ridistribuzione deve rimanere NSPL/MPL 2.0).  
-   - Forkare il progetto e riutilizzare nome/logo, a meno di restrizioni esplicite.  
+    Software: Il codice sorgente, i binari o qualsiasi altro materiale distribuito sotto NSPL.
 
-2.2. Restrizioni:  
-   - Non è possibile ridistribuire il Software sotto GPL o licenze copyleft, a meno che il codice combinato non diventi GPL (come previsto dalla MPL 2.0).  
-   - I Componenti Proprietari devono essere elencati in un file visibile (es. `PROPRIETARY.md`).  
+    Uso Commerciale: Qualsiasi utilizzo del Software da parte di aziende, organizzazioni o individui con l'obiettivo di generare profitto. Le donazioni non rientrano in questa categoria.
 
-3. ATTRIBUZIONE OBBLIGATORIA  
+    Componenti Proprietari: Qualsiasi parte del Software che non è open source.
 
-3.1. Per l'Uso Commerciale, è necessario includere:  
-   - Un avviso nel `README.md` o in un file visibile (es. `NOTICE.md`) con la dicitura:  
-     "Questo prodotto include software licenziato sotto la NSPL (Nova Surf Public License)."  
+2. Diritti Concessi
 
-4. COMPATIBILITÀ  
+2.1. Permessi:
+Ti è concesso di:
 
-4.1. Le versioni future di NSPL (es. 2.0) sono automaticamente compatibili, a meno che il Licenziante non specifichi diversamente.  
-4.2. Il codice sotto NSPL 1.0 può essere rilasciato sotto NSPL 2.0+ a discrezione dell'utente.  
+    Usare, modificare e ridistribuire il Software secondo i termini di questa NSPL o della Mozilla Public License (MPL) 2.0 o successive.
 
-5. DISCLAIMER  
+    Integrare il Software con codice licenziato sotto licenze permissive come MIT, Apache 2.0 o simili. La ridistribuzione del software combinato deve avvenire sotto NSPL o MPL 2.0 o successive.
 
-5.1. Il Software è fornito "COSÌ COM'È", senza garanzie.  
-5.2. Il Licenziante non è responsabile per danni derivanti dall'uso.  
+    Creare un "fork" del progetto e riutilizzare il nome o il logo del progetto originale, a meno che il Licenziante non abbia specificato restrizioni esplicite.
 
-6. COMPONENTI PROPRIETARI  
+2.2. Restrizioni:
+Non puoi:
 
-6.1. Se il Software include parti closed-source, queste devono essere dichiarate in un file dedicato (es. `PROPRIETARY.md`).  
+    Ridistribuire il Software sotto la GNU General Public License (GPL) o altre licenze copyleft, a meno che l'intero software combinato non sia licenziato sotto GPL (come previsto dalla compatibilità con MPL 2.0).
 
-7. MARCHI E LOGHI  
+    Omettere di dichiarare i Componenti Proprietari (se presenti) in un file facilmente accessibile, come PROPRIETARY.md.
 
-7.1. Il nome e il logo del progetto non sono protetti di default e possono essere riutilizzati, a meno di restrizioni esplicite (es. in un file `TRADEMARKS.md`).  
+3. Attribuzione Obbligatoria per Uso Commerciale
 
----
+3.1. Requisito di Attribuzione per Fork Commerciali:
+Se utilizzi il Software per scopi commerciali e ne crei un fork, devi includere un avviso chiaro in un file visibile (ad esempio, README.md o NOTICE.md). L'avviso deve contenere la seguente dicitura:
 
-FINE DELLA LICENZA
+"Questo prodotto è un fork di [Nome del Programma Originale], licenziato sotto la Nova Surf Public License."
+
+4. Compatibilità
+
+4.1. Versioni Future:
+Le versioni future della NSPL (es. 2.0 e successive) sono automaticamente compatibili con questa versione, a meno che il Licenziante non indichi diversamente.
+
+4.2. Aggiornamento Facoltativo:
+Gli utenti possono scegliere di rilasciare codice originariamente sotto NSPL 1.0 anche sotto NSPL 2.0 o versioni successive, a propria discrezione.
+
+5. Esclusione di Garanzia (Disclaimer)
+
+5.1. Stato "Così Com'è":
+Il Software viene fornito "COSÌ COM'È", senza alcuna garanzia esplicita o implicita di alcun tipo, incluse, ma non limitate a, garanzie di commerciabilità, idoneità per uno scopo particolare o non violazione.
+
+5.2. Limitazione di Responsabilità:
+In nessun caso il Licenziante sarà responsabile per eventuali danni diretti, indiretti, incidentali, speciali, esemplari o consequenziali (inclusi, ma non limitati a, l'approvvigionamento di beni o servizi sostitutivi; la perdita di utilizzo, dati o profitti; o l'interruzione dell'attività) comunque causati e su qualsiasi teoria di responsabilità, sia in contratto, responsabilità oggettiva o torto (inclusa negligenza o altro) derivante in qualsiasi modo dall'uso del Software, anche se avvisato della possibilità di tali danni.
+
+6. Dichiarazione dei Componenti Proprietari
+
+6.1. Obbligo di Dichiarazione:
+Qualora il Software includa parti closed-source, queste devono essere chiaramente elencate e dichiarate in un file dedicato, come PROPRIETARY.md.
+
+7. Marchi e Loghi
+
+7.1. Riutilizzo di Nome e Logo:
+Il nome e il logo del progetto non sono protetti di default da questa licenza e possono essere riutilizzati. Tuttavia, il Licenziante può specificare restrizioni esplicite in un file apposito, ad esempio TRADEMARKS.md.
