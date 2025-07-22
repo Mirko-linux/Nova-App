@@ -40,7 +40,7 @@ ArcadiaAI svolge i compiti analoghi alle altre IA, come:
 -  Il supporto di allegati
 -  La generazione di Immagini
 
-Inoltre, ArcadiaAI ha integrato moltissime tool esterni, come Open Street Maps, OpenWeatherMap e moolte repository (Snap, Flathub, F-Droid e Winget)
+Inoltre, ArcadiaAI ha integrato moltissime tool esterni, come Open Street Maps, OpenWeatherMap e molte repository (Snap, Flathub, F-Droid e Winget)
 
 
 ## Nova QuickNote
