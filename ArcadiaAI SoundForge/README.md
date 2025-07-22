@@ -20,7 +20,7 @@ disable_embedding: true
 # ArcadiaAI SoundForge 🎧
 
 **Genera musica AI dal testo, in italiano o qualsiasi lingua, direttamente nel browser.**  
-ArcadiaAI SoundForge è lo studio musicale open source creato da **Mirko (16 anni)** come parte del progetto educativo e no-profit **ArcadiaAI**.
+ArcadiaAI SoundForge è lo studio musicale open source creato da **Mirko Yuri Donato** come parte del progetto no-profit **ArcadiaAI**.
 
 ---
 
