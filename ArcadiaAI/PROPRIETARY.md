@@ -87,7 +87,7 @@ soup = BeautifulSoup(res.text, 'html.parser')
 ## Note sulla Licenza
 
 ArcadiaAI è un progetto **open source** che integra componenti e servizi **proprietari** per l’accesso a modelli avanzati e fonti esterne.  
-Tutti gli elementi elencati sono utilizzati nel rispetto delle loro licenze. Per distribuzioni più restrittive (es. F-Droid), si consiglia di sviluppare una variante "fully libre".
+Tutti gli elementi elencati sono utilizzati nel rispetto delle loro licenze. Per distribuzioni più restrittive (es. F-Droid), si consiglia di sviluppare una variante più libera.
 
 ---
 
