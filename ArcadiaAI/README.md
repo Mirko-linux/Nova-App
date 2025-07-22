@@ -37,10 +37,7 @@ Qui, ogni modulo è pensato per essere:
 | :-------------- | :---------------------------------------------------- |
 | **CES 1.5** | Modello predefinito di ArcadiaAI, basato su Google Gemini |
 | **DeepSeek R1** | Modello linguistico open source gestito tramite Openrouter |
-| **CES 360** | Interfaccia browser per LLaMA 3.3 70B, senza API key  |
 | **CES Plus** | Variante di CES 360 e 1.5 progettata per i ragionamenti |
-| **CES 360e** | Versione più leggera di 360 basato su LLaMA 3.1 8B    |
-
 ---
 
 ## 🚀 Inizia Subito
