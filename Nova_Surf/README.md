@@ -1,4 +1,4 @@
-# 🚀 Nova Surf
+# Nova Surf
 
 ![Logo di Nova Surf](photo_2025-04-09_11-31-55.png)
 
