@@ -4,6 +4,8 @@
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![AI Powered](https://img.shields.io/badge/Powered_by-ArcadiaAI-purple?logo=OpenAI&logoColor=white)](https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI) 
+
 
 
 <h1 align="center">Nova QuickNote</h1>
