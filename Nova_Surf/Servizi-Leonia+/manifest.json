@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "Servizi Leonia+",
+  "description": "Una raccolta dei servizi di Leonia+ direttamente nel browser",
+  "version": "1.0",
+  "permissions": [
+    "activeTab",
+    "https://example.com/*"
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "servizi.leonia@addon",
+      "strict_min_version": "60.0"
+    }
+  }
+}
