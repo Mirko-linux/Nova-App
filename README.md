@@ -46,3 +46,8 @@ Inoltre, ArcadiaAI ha integrato moltissime tool esterni, come Open Street Maps, 
 ## Nova QuickNote
 Nova QuickNote è un editor di testo molto completo, che nasce dall'idea di unire un software per la videoscrittura e uno per l'elaborazione di codice sorgente. Inoltre, l'editor ha ArcadiaAI integrato per facilitare lo svolgere dei compiti.
 Il programma è un fork di *GNU Gedit* ed è sotto la Licenza GNU GPL v3.0+
+
+## Nova Pocket
+
+Nova Pocket è un servizo di cloud storage open source e decentralizzato basato sulla rete peer-to-peer progettato per essere illimitato.
+A differenza dei normali servizi - come Google Drive o Dropbox - in Nova Pocket il file vieene frammentato in pochissimi megabyte e diviso tra gli altri utenti 
