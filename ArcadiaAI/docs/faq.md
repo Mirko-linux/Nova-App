@@ -15,8 +15,6 @@ ArcadiaAI è facilmente accessibile tramite:
 ## Cos'è CES
 
 CES (Cogito Ergo Sum) è il cuore di ArcadiaAI, il modello linguistico **open source** su cui si basa il nostro chatbot.  
-Distribuito sotto licenza **GNU GPL v3.0+**, garantisce **libertà e trasparenza** nello sviluppo.
-
 > Alcune componenti interne (es. API Key) sono fornite da terze parti e distribuite con licenza proprietaria.
 
 ---
@@ -29,7 +27,7 @@ Sì, **ArcadiaAI è completamente gratuito** e open source. Nessun costo nascost
 
 ## Sotto che licenza è distribuito il chatbot?
 
-ArcadiaAI è rilasciato sotto licenza **GNU GPL v3.0+**.
+ArcadiaAI è rilasciato sotto licenza **Mozilla Public License 2.0**.
 
 ---
 
@@ -43,25 +41,25 @@ Puoi accedere al chatbot in due modi:
 
 ## Cos'è CES 360
 
-CES 360 è una nuova generazione del modello ArcadiaAI basata su **LLaMA**, annunciata in due versioni:
+CES 360 è una nuova generazione del modello ArcadiaAI basata su **Mistral**, annunciata in due versioni:
 - CES 360  
-- CES 360 Mini  
+- CES 360e ("Essential)  
 La distribuzione è prevista nei prossimi mesi.
 
 ---
 
-## Che differenza c'è tra 360 e 360 Mini
+## Che differenza c'è tra 360 e 360e
 
 Entrambe le versioni offrono le **stesse funzionalità**.  
 La differenza principale è:
-- **CES 360** utilizza LLaMA 3.3 70B → più potente in prestazioni e calcolo  
-- **CES 360 Mini** → più veloce e ottimizzata per compiti semplici
+- **CES 360** utilizza Mistral 7B → più potente in prestazioni e calcolo  
+- **CES 360e** → più veloce e ottimizzata per compiti semplici
 
 ---
 
 ## Per utilizzare i modelli serve pagare?
 
-No, sia la versione Core che Mini sono gratuite.  
+No, sia la versione Core che e sono gratuite.  
 Tuttavia, potrebbero esserci **limitazioni per gli account free**, decise da Mirko Donato.
 
 ---
