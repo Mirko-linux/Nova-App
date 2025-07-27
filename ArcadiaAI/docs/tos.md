@@ -1,6 +1,6 @@
 # Termini di Servizio di ArcadiaAI
 
-**Data di Entrata in Vigore:** 14 Maggio 2025
+**Data di Entrata in Vigore:** 27 Luglio 2025
 
 Benvenuto/a in **ArcadiaAI**! Utilizzando ArcadiaAI, accetti i seguenti termini e condizioni ("Termini"). Si prega di leggere attentamente.
 
@@ -10,7 +10,7 @@ Benvenuto/a in **ArcadiaAI**! Utilizzando ArcadiaAI, accetti i seguenti termini 
 Utilizzando ArcadiaAI, riconosci di aver letto, compreso e accettato di essere vincolato da questi Termini. Se non li accetti, non utilizzare ArcadiaAI.
 
 ## 2. Descrizione di ArcadiaAI
-ArcadiaAI è un chatbot gratuito e open source, distribuito sotto licenza **GNU GPL v3.0+**.  
+ArcadiaAI è un chatbot gratuito e open source, distribuito sotto licenza **Mozilla Public License 2.0**.  
 Utilizza l'**API Gemini** di Google per fornire risposte e si basa sul nostro modello linguistico **CES**, tra cui:
 
 - **CES 1.5** per generazione di risposte  
@@ -26,10 +26,9 @@ In caso di conflitto tra i Termini di ArcadiaAI e quelli Google, **prevalgono i 
 Se un’attività è permessa da questi Termini ma vietata dai Termini Google, **non deve essere eseguita**.
 
 ## 5. Licenza d’Uso di ArcadiaAI
-ArcadiaAI è distribuito sotto **GNU GPL v3.0+**.  
+ArcadiaAI è distribuito sotto **Mozilla Public License**.  
 Hai diritto a eseguire, modificare e condividere il software nel rispetto della licenza:  
-🔗 [https://www.gnu.org/licenses/gpl-3.0.it.html](https://www.gnu.org/licenses/gpl-3.0.it.html)
-
+[https://www.mozilla.org/en-US/MPL/2.0/](https://www.mozilla.org/en-US/MPL/2.0/)
 Questi Termini regolano l’uso dell’applicazione, la licenza regola l’uso del codice sorgente.
 
 ## 6. Condotta dell’Utente
@@ -50,7 +49,7 @@ ArcadiaAI è fornito **"così com'è"**, senza garanzie di funzionamento, dispon
 Gli sviluppatori non sono responsabili per danni diretti o indiretti derivanti dall’uso o impossibilità d’uso di ArcadiaAI.
 
 ## 9. Proprietà Intellettuale
-Tutto il codice è sotto GNU GPL v3.0+, **esclusi i componenti API di Google**, che rimangono di proprietà di Google.
+Tutto il codice è sotto Mozilla Pubblic License, **esclusi i componenti API di Google**, che rimangono di proprietà di Google.
 
 I contenuti generati sono soggetti ai Termini Google: l’utente è responsabile del loro uso e della verifica dei diritti.
 
@@ -76,7 +75,7 @@ ArcadiaAI può contenere link a risorse esterne. Non siamo responsabili per cont
 
 ---
 
-## 🏷️ Riconoscimenti
+##  Riconoscimenti
 
 ArcadiaAI utilizza l’API Gemini di Google.  
 Riconosciamo e rispettiamo la proprietà intellettuale di Google.
