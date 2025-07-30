@@ -16,7 +16,7 @@ Utilizza l'**API Gemini** di Google per fornire risposte e si basa sul nostro mo
 - **CES 1.5** per generazione di risposte  
 - **CES Plus** per ragionamenti avanzati (disponibile gratuitamente)
 
-ArcadiaAI è indipendente e **non affiliato a Google**. Il codice sorgente è pubblico e modificabile nel rispetto della licenza GNU GPL v3.0+.
+ArcadiaAI è indipendente e **non affiliato a Google**. Il codice sorgente è pubblico e modificabile nel rispetto della licenza Mozilla Public License 2.0.
 
 ## 3. Utilizzo dell'API di Google
 L'uso dell'API Gemini implica l'accettazione dei **Google APIs Terms of Service** e dei **Gemini API Additional Terms of Service** ("Termini Google").
