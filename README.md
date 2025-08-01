@@ -32,7 +32,7 @@ Il browser ha già alcune estensioni in via di rilascio, tra cui il *Firefox Rel
 ## ArcadiaAI
 
 ArcadiaAI è un chatbot basato su Intelligenza Artificiale generativa libero e open source. Lo scopo dell'IA è quello di rendere accessibile questo mondo a tutti gli utenti, indistintamente dal denaro.
-L'intero codice sorgente è rilasciato sotto la GNU GPL v3.0+, ad eccezione delle estensioni (Gli ArcadiaAI Addon), che possono avere licenze diverse a scelta dell'autore.
+L'intero codice sorgente è rilasciato sotto la Mozilla Public License 2.0, ad eccezione delle estensioni (Gli ArcadiaAI Addon), che possono avere licenze diverse a scelta dell'autore.
 ArcadiaAI usa diversi Modelli, tra cui: la linea CES, i modelli ufficiali di ArcadiaAI, basati su Google Gemini; LLaMA, usato come base per il nuovo CES 360e; Mistral, noto LLM dell'omonima società francese; e infine DeepSeek, disponibili entrambe le versione v3 e R1
 
 ArcadiaAI svolge i compiti analoghi alle altre IA, come:
