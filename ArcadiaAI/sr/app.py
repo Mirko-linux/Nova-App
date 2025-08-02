@@ -1,7 +1,7 @@
 # 1. Import e configurazioni base
 import os
 from pathlib import Path
-from PyPDF2 import PdfReader # Assicurati che PyPDF2 sia necessario, altrimenti potresti rimuoverlo
+from PyPDF2 import PdfReader
 import PyPDF2
 from dotenv import load_dotenv
 from io import BytesIO
@@ -44,7 +44,7 @@ import io
 
 # ===== 3. IMPORTS DI TERZE PARTI =====
 # Flask e dipendenze
-from flask import Flask, redirect, request, jsonify, send_file, send_from_directory, session # current_app non sempre necessario qui
+from flask import Flask, redirect, request, jsonify, send_file, send_from_directory, session 
 from flask_cors import CORS
 
 # Telegram e bot
@@ -77,11 +77,8 @@ from openpyxl import load_workbook
 from fuzzywuzzy import fuzz
 
 
-# ===== 4. INIZIALIZZAZIONE APP FLASK =====
-# QUESTA È L'UNICA INIZIALIZZAZIONE DI 'app'. Assicurati che sia UNICA nel file.
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret-default-key") # Usa una chiave segreta robusta in produzione
-
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret-default-key")
 
 # Configura CORS in modo più permissivo per il testing
 CORS(app, resources={
@@ -113,13 +110,6 @@ try:
 except Exception as e:
     print(f"ERRORE TTS: Impossibile configurare Google TTS: {e}")
     client = None # Imposta a None per indicare che il client non è disponibile
-
-
-# Caricamento variabili d'ambiente
-# `load_dotenv()` è già stato chiamato all'inizio con `override=True`
-# Non è necessario chiamarlo di nuovo qui, a meno che tu non voglia un comportamento diverso.
-# print(f"Percorso .env: {env_path}") # Già stampato
-# print(f"File esiste? {env_path.exists()}") # Già stampato
 
 # Rileva e carica le API Keys dalle variabili d'ambiente
 TELEGRAPH_API_KEY = os.getenv("TELEGRAPH_API_KEY")
@@ -4677,3 +4667,4 @@ if __name__ == "__main__":
     flask_thread.start()
 
     asyncio.run(run_telegram_bot())
+
