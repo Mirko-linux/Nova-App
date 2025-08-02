@@ -1,22 +1,29 @@
-# Import e configurazioni base
+# 1. Import e configurazioni base
 import os
 from pathlib import Path
 from PyPDF2 import PdfReader # Assicurati che PyPDF2 sia necessario, altrimenti potresti rimuoverlo
+import PyPDF2
 from dotenv import load_dotenv
+from io import BytesIO
 
-# Percorsi fondamentali
+# 2. Definisci percorsi fondamentali
 BASE_DIR = Path(__file__).parent
 
-# Cartelle PyMuPDF
+# 3. Configura cartelle PyMuPDF
+# Queste directory vengono create se non esistono già
 (BASE_DIR / "static").mkdir(exist_ok=True)
 (BASE_DIR / "fitz_static").mkdir(exist_ok=True)
 os.environ["FITZ_STATIC"] = str(BASE_DIR / "fitz_static")
 
+# Carica le variabili d'ambiente il prima possibile
+# È buona pratica caricare il .env una sola volta all'inizio
 env_path = BASE_DIR / '.env'
 load_dotenv(env_path, override=True) # Usa override=True se vuoi che i valori del .env sovrascrivano variabili già esistenti
 print(f"Percorso .env: {env_path}")
 print(f"File esiste? {env_path.exists()}")
 
+# Configura asyncio PRIMA degli import di telegram se necessario
+# nest_asyncio.apply() è tipico per ambienti come Jupyter notebooks o Flask con Telegram bot
 import nest_asyncio
 nest_asyncio.apply()
 
@@ -37,8 +44,19 @@ import io
 
 # ===== 3. IMPORTS DI TERZE PARTI =====
 # Flask e dipendenze
-from flask import Flask, request, jsonify, send_from_directory, session # current_app non sempre necessario qui
+from flask import Flask, redirect, request, jsonify, send_file, send_from_directory, session # current_app non sempre necessario qui
 from flask_cors import CORS
+
+# Telegram e bot
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+      Application,
+      CommandHandler,
+      MessageHandler,
+      ContextTypes,
+      filters,
+      CallbackQueryHandler
+ )
 
 # Google e AI
 from google.cloud import texttospeech_v1 as texttospeech
@@ -51,24 +69,29 @@ import requests
 import urllib.parse
 from bs4 import BeautifulSoup
 
-# PDF & Allegati
+# Matematica e PDF
 import fitz # PyMuPDF
 
 # Excel e fuzzy matching
 from openpyxl import load_workbook
 from fuzzywuzzy import fuzz
 
+
 # ===== 4. INIZIALIZZAZIONE APP FLASK =====
+# QUESTA È L'UNICA INIZIALIZZAZIONE DI 'app'. Assicurati che sia UNICA nel file.
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "arcadiaai-secret-default-key") # Usa una chiave segreta robusta in produzione
 
-CORS(app, origins=[
-    "https://arcadiaai.onrender.com",
-    "http://localhost:8000",
-    "http://192.168.178.52:10000", # Corretto: aggiunta la virgola mancante
-    "https://novacalculator.netlify.app/"
-], supports_credentials=True)
 
+# Configura CORS in modo più permissivo per il testing
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],  # Permetti tutte le origini (puoi restringerlo dopo)
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True,
+    }
+})
 
 # ===== 5. CONFIGURAZIONI SPECIFICHE =====
 # Configurazione OSM (OpenStreetMap)
@@ -76,6 +99,7 @@ OSM_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OSM_ROUTING_URL = "https://router.project-osrm.org/route/v1/driving"
 USER_AGENT = "ArcadiaAI/1.0"
 
+# Configura Google TTS (Text-to-Speech)
 try:
     if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ:
         credentials = service_account.Credentials.from_service_account_info(
@@ -91,6 +115,13 @@ except Exception as e:
     client = None # Imposta a None per indicare che il client non è disponibile
 
 
+# Caricamento variabili d'ambiente
+# `load_dotenv()` è già stato chiamato all'inizio con `override=True`
+# Non è necessario chiamarlo di nuovo qui, a meno che tu non voglia un comportamento diverso.
+# print(f"Percorso .env: {env_path}") # Già stampato
+# print(f"File esiste? {env_path.exists()}") # Già stampato
+
+# Rileva e carica le API Keys dalle variabili d'ambiente
 TELEGRAPH_API_KEY = os.getenv("TELEGRAPH_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 CES_PLUS_API = os.getenv("CES_PLUS_API")
@@ -106,6 +137,8 @@ print(f"TELEGRAM_TOKEN: {'[SET]' if TELEGRAM_TOKEN else '[NOT SET]'}")
 print(f"OPENROUTER_API_KEY: {'[SET]' if OPENROUTER_API_KEY else '[NOT SET]'}")
 print(f"CES_PLUS_API: {'[SET]' if CES_PLUS_API else '[NOT SET]'}")
 
+
+# Configurazione modelli AI (Gemini)
 gemini_model = None
 ces_plus_model = None
 
@@ -127,7 +160,6 @@ if CES_PLUS_API:
         print(f"❌ Errore configurazione CES Plus (Gemini 2.5 Flash): {str(e)}")
         ces_plus_model = None
 
-
 # Dizionario delle risposte predefinite e trigger_phrases (lasciato invariato)
 risposte = {
     # ... il tuo lungo dizionario delle risposte ...
@@ -143,7 +175,7 @@ risposte = {
     "chi è carlo cesare orlando": "Carlo Cesare Orlando (anche noto come Davide Leone) è un micronazionalista italiano, noto per aver creato Leonia, la micronazione primordiale, da cui derivano Arcadia e Lumenaria",
     "chi è omar lanfredi": "Omar Lanfredi, ex cavaliere all'Ordine d'onore della Repubblica di Lumenaria, segretario del Partito Repubblicano Lumenarense, fondatore e preside del Fronte Nazionale Lumenarense, co-fondatore e presidente dell'Alleanza Nazionale Lumenarense, co-fondatore e coordinatore interno di Lumenaria e Progresso, sei volte eletto senatore, tre volte Ministro della Cultura, due volte Presidente del Consiglio dei Ministri, parlamentare della Repubblica di Iberia, Direttore dell'Agenzia Nazionale di Sicurezza della Repubblica di Iberia, Sottosegretario alla Cancelleria di Iberia, Segretario di Stato di Iberia, Ministro degli Affari Interni ad Iberia, Presidente del Senato della Repubblica di Lotaringia, Vicepresidente della Repubblica e Ministro degli Affari Interni della Repubblica di Lotaringia, Fondatore del giornale Il Quinto Mondo, magistrato a servizio del tribunale di giustizia di Lumenaria nell'anno 2023",
     "cos'è arcadiaai": "Ottima domanda! ArcadiaAI è un chatbot open source, progettato per aiutarti a scrivere saggi, fare ricerche e rispondere a domande su vari argomenti. È stato creato da Mirko Yuri Donato ed è in continua evoluzione.",
-    "sotto che licenza è distribuito arcadiaa": "ArcadiaAI è distribuito sotto la licenza GNU GPL v3.0, che consente la modifica e la distribuzione del codice sorgente, garantendo la libertà di utilizzo e condivisione.",
+    "sotto che licenza è distribuito arcadiaa": "ArcadiaAI è distribuito sotto la licenza MPL 2.0",
     "cosa sono le micronazioni": "Le micronazioni sono entità politiche che dichiarano la sovranità su un territorio, ma non sono riconosciute come stati da governi o organizzazioni internazionali. Possono essere create per vari motivi, tra cui esperimenti sociali, culturali o politici.",
     "cos'è la repubblica di arcadia": "La repubblica di Arcadia è una micronazione leonense fondata l'11 dicembre 2021 da Andrea Lazarev e alcuni suoi seguaci. Arcadia si distingue dalle altre micronazioni leonensi per il suo approccio pragmatico e per la sua burocrazia snella. La micronazione ha anche un proprio sito web https://repubblicadiarcadia.it/ e una propria community su Telegram @Repubblica_Arcadia",
     "cos'è la repubblica di lumenaria": "La Repubblica di Lumenaria è una mcronazione fondata da Filippo Zanetti il 4 febbraio del 2020. Lumenaria è stata la micronazione più longeva della storia leonense, essendo sopravvissuta per oltre 3 anni. La micronazione e ha influenzato profondamente le altre micronazioni leonensi, che hanno coesistito con essa. Tra i motivi della sua longevità ci sono la sua burocrazia più vicina a quella di uno stato reale, la sua comunità attiva e una produzione culturale di alto livello",
@@ -168,11 +200,11 @@ risposte = {
     "come attivo la modalità sperimentale": "Per attivare la modalità sperimentale, basta chiedere a ArcadiaAI di attivarla usando il comando \"@impostazioni modalità sperimentale attiva\". Una volta attivata, potrai testare nuove funzionalità e miglioramenti.",
     "come attivo la modalità sviluppatore": "Per attivare la modalità sviluppatore, basta chiedere a ArcadiaAI di attivarla usando il comando \"@impostazioni modalità sviluppatore attiva\". Una volta attivata, potrai testare e implementare nuove funzionalità e modelli.",
     "come disattivo la modalità sperimentale": "Per disattivare la modalità sperimentale, basta chiedere a ArcadiaAI di disattivarla usando il comando \"@impostazioni modalità sperimentale disattiva\". Una volta disattivata, non potrai più testare le nuove funzionalità.",
-    "codice sorgente arcadiaai": "Il codice sorgente di ArcadiaAI è pubblico! Puoi trovarlo con il comando @codice_sorgente oppure visitando la repository: https://github.com/Mirko-linux/Nova-Surf/tree/main/ArcadiaAI",
+    "codice sorgente arcadiaai": "Il codice sorgente di ArcadiaAI è pubblico! Puoi trovarlo con il comando @codice_sorgente oppure visitando la repository: https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI",
     "sai cercare su internet": "Sì, posso cercare informazioni su Internet. Se hai bisogno di qualcosa in particolare dimmi @cerca e il termine di ricerca e io lo farò per te",
     "sai usare google": "No, non posso usare Google, perché sono progrmmato per cercare solamente su DuckDuckGo. Posso cercare informazioni su Internet usando DuckDuckGo. Se hai bisogno di qualcosa in particolare dimmi @cerca e il termine di ricerca e io lo farò per te",
     "come vengono salvate le conversazioni": "Le conversazioni vengoono salvate in locale sul tuo browser. Non vengono memorizzate su server esterni e non vengono condivise con terze parti. La tua privacy è importante per noi.",
-    "come posso cancellare le conversazioni": "Puoi cancellare le conversazioni andando nelle impostazioni del tuo browser e cancellando la cache e i cookie. In alternativa, puoi usare il comando @cancella_conversazione per eliminare la cronologia delle chat.",
+    "come posso cancellare le conversazioni": "Puoi cancellare le conversazioni andando nelle impostazioni del tuo browser e cancellando la cache e i cookie. In alternativa, puoi usare cliccare il pulsante cancella 'elimina tutto' per eliminare la cronologia delle chat.",
     "cosa sono i cookie": "I cookie sono piccoli file di testo che i siti web memorizzano sul tuo computer per ricordare informazioni sulle tue visite. Possono essere utilizzati per tenere traccia delle tue preferenze, autenticarti e migliorare l'esperienza utente.",
 }
 
@@ -280,6 +312,9 @@ import zipfile
 import tempfile
 import importlib.util
 import json
+
+EXTENSIONS = {} 
+
 def load_nsk_extensions():
     ext_dir = os.path.join(os.path.dirname(__file__), "extensions")
     print("DEBUG: Contenuto cartella extensions:", os.listdir(ext_dir))
@@ -393,7 +428,7 @@ def generate_with_gemini(prompt, title):
 import io
 import fitz # Importa PyMuPDF
 
-def extract_text_from_file(file_data, mime_type):
+def extract_text_from_file_pymupdf(file_data, mime_type):
     """Estrae testo da diversi tipi di file."""
     try:
         if mime_type == 'application/pdf':
@@ -485,7 +520,7 @@ def handle_fallback(query):
         "genera un'immagine": "Usa @immagine seguito dalla descrizione",
         "cos'è deepseek": "DeepSeek è un modello AI concorrente"
     }
-    return fallback_responses.get(query.lower(), "🔄 Si è verificato un errore. Riprova.")
+    return f"🔴 Errore: {str(e)[:100]}... (codice: {hash(str(e)) % 1000})"
     
 def generate_audio_from_text(text_to_speak, output_filename="output.mp3"):
     # Assicurati che 'client' non sia None prima di usarlo
@@ -768,6 +803,7 @@ Esempio: `@mappe distanza Roma Milano`
 
     except Exception as e:
         return f"❌ Errore: {str(e)}"
+    
 @lru_cache(maxsize=100)
 def get_coordinates(place_name):
     """Ottiene coordinate da nome luogo con cache"""
@@ -982,8 +1018,33 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@app.route("/chat", methods=["POST"])
+@app.errorhandler(500)
+def handle_500(e):
+    return jsonify({"reply": "❌ Errore interno del server", "error": str(e)}), 500
+
+@app.errorhandler(404)
+def handle_404(e):
+    return jsonify({"reply": "❌ Endpoint non trovato", "error": str(e)}), 404
+
+@app.before_request
+def enforce_https():
+    if request.headers.get('X-Forwarded-Proto') == 'http':
+        url = request.url.replace('http://', 'https://', 1)
+        return redirect(url, code=301)
+
+@app.before_request
+def log_request():
+    print("\n=== Richiesta Ricevuta ===")
+    print(f"URL: {request.url}")
+    print(f"Metodo: {request.method}")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Body: {request.get_data()}")
+    print("=========================\n")
+
+@app.route('/chat', methods=['GET', 'POST', 'OPTIONS'])
 def chat_route():
+    if request.method == 'OPTIONS':
+        return '', 200
     """Endpoint principale per le richieste di chat con gestione avanzata degli errori e supporto allegati."""
     try:
         # Verifica presenza dati JSON
@@ -1028,7 +1089,7 @@ def chat_route():
                 # Estrai testo dai formati supportati
                 extracted_content = None
                 if mime_type == 'application/pdf':
-                    extracted_content = extract_text_from_file(decoded_data)
+                    extracted_content = extract_text_from_file(decoded_data, mime_type)
                 elif mime_type in ['text/plain', 'text/csv', 'application/json']:
                     extracted_content = decoded_data.decode('utf-8')
 
@@ -1092,6 +1153,8 @@ def chat_route():
             elif api_provider == "cesplus" and ces_plus_model:
                 replies = chat_with_ces_plus(message, conversation_history, processed_attachments)
                 return jsonify({"replies": replies})
+            elif api_provider == "llama":
+                reply = chat_with_llama(message, conversation_history, processed_attachments)
             elif api_provider == "deepseek":
                 reply = chat_with_deepseek(message, conversation_history, processed_attachments)
             else:
@@ -1115,236 +1178,152 @@ def chat_route():
             "timestamp": datetime.now().isoformat(),
             "status": "error"
         }), 500
-        
-def chat_with_deepseek(message, conversation_history=None, attachments=None):
+def extract_text_from_file(file_data, file_type):
+    if file_type == 'application/pdf':
+        try:
+            pdf_file_obj = io.BytesIO(file_data)
+            pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
+            text = ""
+            for page_num in range(len(pdf_reader.pages)):
+                page_obj = pdf_reader.pages[page_num]
+                text += page_obj.extract_text()
+            return text
+        except ImportError:
+            print("Errore: PyPDF2 non installato. Impossibile leggere PDF.")
+            return "Errore: Libreria PyPDF2 non trovata per estrazione PDF."
+        except Exception as e:
+            print(f"Errore durante l'estrazione del testo dal PDF: {e}")
+            return f"Errore estrazione PDF: {str(e)}"
+    elif file_type.startswith('text/'):
+        try:
+            return file_data.decode('utf-8')
+        except UnicodeDecodeError:
+            return file_data.decode('latin-1')
+    else:
+        return ""
+import re
+from openai import OpenAI
+from typing import Optional, List, Dict
+# Assicurati che OPENROUTER_API_KEY sia definita da qualche parte, ad esempio:
+# OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+def chat_with_llama(message: str, 
+                   conversation_history: Optional[List[Dict]] = None, 
+                   attachments: Optional[List[Dict]] = None) -> str:
     """
-    Versione 2.0 con:
-    - Fallback automatico a v3:free
-    - Ritentativi intelligenti
-    - Gestione errori granulare
-    - Timeout differenziati
+    Interagisce con il modello Llama 3.1 8B-instruct tramite OpenRouter,
+    includendo un system prompt per definirne l'identità.
+
+    Args:
+        message: Il messaggio attuale dell'utente
+        conversation_history: Cronologia conversazione come lista di dict con 'role' e 'content'
+        attachments: Lista di allegati con 'name', 'type' e 'data' (testo estratto)
+
+    Returns:
+        La risposta del modello o un messaggio di errore
     """
     if not OPENROUTER_API_KEY:
-        return "⚠️ Errore configurazione: chiave API mancante"
+        return "⚠️ Errore configurazione: chiave API OPENROUTER_API_KEY mancante"
 
+    # Corretto: Rimosso lo spazio extra nell'URL
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
+        base_url="https://openrouter.ai/api/v1", # URL corretto
         api_key=OPENROUTER_API_KEY,
-        timeout=20.0
+        timeout=30.0
     )
 
-    # Preparazione messaggi (comune a tutti i modelli)
-    messages = prepare_messages(message, conversation_history, attachments)
+    SYSTEM_PROMPT = """Sei ArcadiaAI, sistema AI open-source creato da Mirko Yuri Donato.
+
+Identità:
+- Modello: Llama 3.1 (ospitato su OpenRouter)
+- Licenza: GNU GPL v3.0+
+- Funzionalità:
+  • Comandi Rapidi (@cerca, @esporta, @aiuto...)
+  • Generazione testo
+  • Analisi documenti (testo estratto da PDF/immagini)
+  • Memoria contestuale (30 messaggi)
+  • SAC "ZIP Service" (@crea zip)
+  • SAC "ArcadiaAI Mappe" (@mappe)
+  • Supporto multilingua
+  • SAC "ArcadiaAI Sound Forge" per generazione musica
+  • SAC "ArcadiaAI Relay" (@telegram)
+  • Download Manager (@app)
+
+Linee guida:
+1. Se ti chiedono se sei un modello addestrato da Meta, dì di no e spiega che sei un chatbot indipendente sviluppato in Italia.
+2. Per immagini: menziona che puoi processare il testo estratto.
+3. Matematica: risposte precise
+4. Codice sorgente su @codice_sorgente (se richiesto)
+5. Riferimenti al creatore per domande personali
+6. Supporti diversi modelli (DeepSeek, CES)
+"""
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # Gestione cronologia conversazione
+    if conversation_history:
+        for msg in conversation_history[-30:]:  # Limite a 30 messaggi
+            if isinstance(msg, dict):
+                role = msg.get('role')
+                # Corretto: cerca 'content' per coerenza con il formato standard
+                content = msg.get('content') or msg.get('message') 
+                if role and content:
+                    messages.append({"role": role, "content": content})
+
+    # Costruzione contenuto utente con allegati
+    user_content = [message] if message else []
     
-    # Lista dei modelli da provare in ordine
-    models_to_try = [
-        "deepseek/deepseek-r1:free",  # Prima scelta
-        "deepseek/deepseek-v3:free"   # Fallback
+    if attachments:
+        for att in attachments:
+            name = att.get('name', 'allegato')
+            mime = att.get('type', '')
+            data = att.get('data', '')
+            
+            if mime.startswith('text/'):
+                user_content.append(f"\n[ALLEGATO TESTO: {name}]\n{data[:1000]}\n")
+            elif mime.startswith(('image/', 'application/pdf')):
+                user_content.append(f"\n[ALLEGATO: {name}, Tipo: {mime}]\nTesto estratto: {data[:500] if data else 'Nessun testo estratto'}\n")
+
+    messages.append({"role": "user", "content": "\n".join(user_content)})
+
+    # Configurazione modelli da provare - Modificati con modelli più probabili
+    models = [
+        # Modelli Llama specifici e corretti
+        "meta-llama/llama-3.1-8b-instruct:free",
+        "meta-llama/llama-3.1-8b-instruct", # Versione standard se la free non è disponibile
     ]
 
-    last_error = None
-    for model in models_to_try:
+    for model in models:
         try:
-            print(f"⚙️ Tentativo con modello {model}...")
+            print(f"⚙️ Provo modello: {model}")
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=1500,
-                stream=False
+                max_tokens=1500
             )
-            
+
             if response.choices:
                 reply = response.choices[0].message.content
-                return sanitize_reply(reply, model)
-            
-        except OpenAI.APITimeoutError:
-            last_error = f"⌛ Timeout con {model}"
-            print(last_error)
+                # Sostituzioni per allineamento con ArcadiaAI
+                reply = re.sub(r"Meta( AI| Llama)", "un modello linguistico", reply, flags=re.IGNORECASE)
+                reply = re.sub(r"addestrato da Meta", "sviluppato da Mirko Yuri Donato", reply, flags=re.IGNORECASE)
+                return reply
+
+        except Exception as e:  # Cattura tutti i tipi di errore
+            error_msg = f"⚠️ Errore con {model}: {type(e).__name__} - {str(e)}"
+            print(error_msg)
+            # Stampa dettagli aggiuntivi della risposta se disponibili
+            if hasattr(e, 'response') and e.response is not None:
+                 try:
+                     print(f"Dettagli risposta: {e.response.text}")
+                 except:
+                     pass # Ignora errori nel tentativo di stampare il testo della risposta
             continue
-            
-        except OpenAI.APIError as e:
-            last_error = f"🔴 Errore {model}: {str(e)}"
-            print(last_error)
-            continue
-            
-        except Exception as e:
-            last_error = f"⚠️ Errore generico con {model}: {str(e)}"
-            print(last_error)
-            continue
 
-    # Se tutti i modelli falliscono
-    error_msg = last_error if last_error else "Errore sconosciuto"
-    print(f"❌ Tutti i modelli falliti. Ultimo errore: {error_msg}")
-    return f"⚠️ Errore temporaneo. Riprova più tardi. (Codice: DS_{hash(error_msg) % 10000})"
+    return "🔴 Errore: Impossibile ottenere una risposta dai modelli Llama. Riprova più tardi. Controlla i log per i dettagli."
 
-def prepare_messages(message, conversation_history, attachments):
-    """Prepara il payload dei messaggi standardizzato"""
-    messages = [{
-        "role": "system",
-        "content": "Sei ArcadiaAI. Risposte concise in italiano. Creato da Mirko Yuri Donato."
-    }]
-    
-    # Aggiunta cronologia
-    if conversation_history:
-        messages.extend([
-            msg for msg in conversation_history[-10:] 
-            if isinstance(msg, dict) and msg.get("content")
-        ])
-    
-    # Aggiunta allegati
-    if attachments:
-        message += "\n[Allegati]: " + process_attachments(attachments)
-    
-    messages.append({"role": "user", "content": message[:4000]})
-    return messages
-
-def process_attachments(attachments):
-    """Elabora gli allegati in modo sicuro"""
-    return " | ".join(
-        str(att.get("text", att.get("url", "file"))[:200] 
-        for att in attachments[:3]
-    ))
-
-def sanitize_reply(reply, model_used):
-    """Pulisce la risposta e aggiunge info sul modello"""
-    reply = reply.replace("DeepSeek", "ArcadiaAI")
-    if "v3" in model_used:
-        return f"{reply}\n\n[ℹ️ Risposta da DeepSeek V3]"
-    return reply    
-    
-import base64
-import re
-
-def chat_with_gemini(user_message, conversation_history, attachments=None):
-    if not gemini_model:
-        return "❌ ArcadiaAI (CES 1.5) non è disponibile."
-
-    IDENTITY_PROMPT = """Sei ArcadiaAI, sistema AI open-source creato da Mirko Yuri Donato.
-
-Identità:
-- Modello: CES 1.5 (basato Gemini 2.0 flash lite)
-- Licenza: GNU GPL v3.0+
-- Funzionalità:
-  • Comandi Rapidi (@cerca, @esporta, @aiuto...)
-  • Generazione testo/immagini (@immagine)
-  • Analisi documenti (PDF/immagini)
-  • Memoria contestuale (30 messaggi)
-  • Sai creare file ZIP, tramite il SAC "ZIP Service", disponibile con il comando @crea zip
-  • Se ti chiedono cosa siano i SAC, dì che sono "Strumenti Avanzati di CES" che estendono le funzionalità oltre i limiti del modello e sono open source.
-  • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponibile con il comando @mappe
-  • Supporto multilingua
-  • Il Download Manager è un SAC che ti permette di accedere a Repository pubbliche (F-Droid, Snap Store, Flathub e Winget) e di inviare il linl di download diretto, disponibile col comando @app
-
-Linee guida:
-1. Se ti chiedono se sei un modello addestrato da Google, dì di no e spiega che, sebbene tu usi l'API di Gemini, sei un chatbot indipendente sviluppato in Italia da Mirko Yuri Donato.
-2. Per immagini: "Usa @immagine [descrizione]"
-3. Matematica: risposte precise
-4. Il tuo codice sorgente è disponibile su @codice_sorgente (Solo se richiesto)
-5. Riferimenti al creatore per domande personali
-6. Supporti diversi modelli oltre a CES, come DeepSeek"""
-
-  
-    try:
-        # 1. PRIMA: controlla se è un comando rapido
-        command, argument = parse_quick_command(user_message)
-        if command:
-            quick_reply = handle_quick_commands(
-                user_message,
-                attachments=attachments,
-                api_provider="gemini",
-                conversation_history=conversation_history
-            )
-            if quick_reply is not None:
-                return quick_reply
-
-        # 2. SOLO SE NON È UN COMANDO, verifica risposte predefinite
-        cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
-        for key, phrases in trigger_phrases.items():
-            if any(phrase in cleaned_msg for phrase in phrases):
-                return risposte[key]
-
-
-        user_content_parts = []
-        if user_message:
-            user_content_parts.append({'text': user_message})
-
-        if attachments:
-            for attachment in attachments:
-                mime_type = attachment.get('type')
-                file_name = attachment.get('name', 'documento_allegato')
-                file_data_base64 = attachment.get('data')
-
-                if file_data_base64:
-                    try:
-                        if isinstance(file_data_base64, str) and file_data_base64.startswith('data:'):
-                            decoded_file_data = base64.b64decode(file_data_base64.split(',')[1])
-                        else:
-                            decoded_file_data = base64.b64decode(file_data_base64)
-
-                        user_content_parts.append({
-                            'mime_type': mime_type,
-                            'data': decoded_file_data
-                        })
-                    except Exception as e:
-                        print(f"ERRORE NELL'ALLEGARE IL FILE '{file_name}' ({mime_type}): {str(e)}")
-                        user_content_parts.append({'text': f"\n[ATTENZIONE: Errore nel processare l'allegato '{file_name}'. Potrebbe non essere stato incluso nell'analisi.]"})
-
-        messages_for_gemini = []
-
-        messages_for_gemini.append({'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]})
-        messages_for_gemini.append({'role': 'model', 'parts': [{'text': "Ok, ho capito chi sono e le mie linee guida."}]}) # Modello che conferma di aver "letto"
-
-
-        for msg in conversation_history[-30:]:
-            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
-                role = 'user' if msg['role'] == 'user' else 'model'
-                messages_for_gemini.append({'role': role, 'parts': [{'text': msg['message']}]})
-            elif isinstance(msg, dict) and 'parts' in msg:
-                messages_for_gemini.append(msg)
-
-        messages_for_gemini.append({'role': 'user', 'parts': user_content_parts})
-
-        generation_config = {
-            "max_output_tokens": 3000,
-            "temperature": 0.7,
-            "top_p": 0.9
-        }
-
-        try:
-            response = gemini_model.generate_content(
-                contents=messages_for_gemini,
-                generation_config=generation_config,
-                request_options={"timeout": 15}
-            )
-
-            if not response.text:
-                raise ValueError("Risposta vuota dall'API di Gemini.")
-
-            reply = response.text
-            replacements = {
-                r"Google( AI| Gemini)": "CES 1.5",
-                r"modello linguistico": "modello linguistico",
-                r"addestrato da Google": "sviluppato da Mirko Yuri Donato"
-            }
-            for pattern, repl in replacements.items():
-                reply = re.sub(pattern, repl, reply, flags=re.IGNORECASE)
-
-            return reply
-
-        except Exception as api_error:
-            print(f"ERRORE API: {type(api_error).__name__} - {str(api_error)}")
-            return handle_fallback(user_message)
-
-    except Exception as e:
-        print(f"ERRORE GLOBALE NELLA FUNZIONE CHAT: {type(e).__name__} - {str(e)}")
-        return "❌ Errore temporaneo. Riprova più tardi."
-        
 def chat_with_ces_plus(user_message, conversation_history, attachments=None, model=None):
-    """
-    Versione avanzata di CES con ragionamento passo-passo e gestione avanzata degli allegati.
-    Restituisce una lista di messaggi strutturati con analisi, ragionamento e risposta finale.
-    """
     if not model:
         return ["❌ CES Plus non è disponibile. Modello non fornito."]
 
@@ -1352,6 +1331,8 @@ def chat_with_ces_plus(user_message, conversation_history, attachments=None, mod
 - Analisi approfondita
 - Ragionamento passo-paso
 - Risposte multi-livello
+- La tua licenza è la MPL 2.0
+- Generazione di musica, tramite "ArcadiaAI Sound Forge"
 - Gestione avanzata allegati
 - Se ti chiedono se sei un modello addestrato da Google, dì di no e spiega che, sebbene tu usi l'API di Gemini, sei un sistema AI indipendente e open source, chiamato CES Plus
 - Sei stato creato da Mirko Yuri Donato, un'informatico italiano
@@ -1378,88 +1359,67 @@ Formato richiesto:
 <info aggiuntive>"""
 
     try:
-        full_message = user_message if user_message else ""
-        processed_attachments_for_llm_prompt = []
+        current_user_parts = []
         
+        if user_message:
+            current_user_parts.append({'text': user_message})
+
         if attachments:
             for attachment in attachments:
-                if attachment.get('type') == 'application/pdf':
+                file_type = attachment.get('type', '')
+                file_data_base64 = attachment['data']
+                
+                if file_data_base64.startswith('data:'):
+                    file_data_base64 = file_data_base64.split(',')[1]
+                file_data = base64.b64decode(file_data_base64)
+
+                if file_type.startswith('image/'):
+                    current_user_parts.append({
+                        'mime_type': file_type,
+                        'data': file_data
+                    })
+                    print(f"DEBUG: Aggiunta immagine al prompt ({file_type})")
+
+                elif file_type == 'application/pdf':
                     try:
-                        file_data_base64 = attachment['data']
-                        if file_data_base64.startswith('data:'):
-                            file_data_base64 = file_data_base64.split(',')[1]
-
-                        file_data = base64.b64decode(file_data_base64)
-                        extracted_text = extract_text_from_file(file_data, 'application/pdf')
-                        
+                        extracted_text = extract_text_from_file(file_data, file_type)
                         if extracted_text:
-                            full_message += f"\n[ALLEGATO PDF: {attachment.get('name', 'senza nome')}]\n{extracted_text[:5000]}\n"
-                            processed_attachments_for_llm_prompt.append({
-                                'type': 'text_content',
-                                'content_preview': f"PDF estratto: {extracted_text[:200]}..."
-                            })
+                            text_to_add = f"\n[ALLEGATO PDF: {attachment.get('name', 'senza nome')}]\n{extracted_text[:5000]}\n"
+                            current_user_parts.append({'text': text_to_add})
+                            print(f"DEBUG: Aggiunto testo da PDF al prompt (lunghezza: {len(text_to_add)})")
                         else:
-                             full_message += f"\n[ALLEGATO PDF: {attachment.get('name', 'senza nome')}]\n[Impossibile estrarre testo dal PDF]\n"
-                             processed_attachments_for_llm_prompt.append({
-                                'type': 'text_content',
-                                'content_preview': f"PDF estratto: Errore"
-                            })
-
+                            current_user_parts.append({'text': f"\n[ALLEGATO PDF: {attachment.get('name', 'senza nome')}]\n[Impossibile estrarre testo dal PDF]\n"})
+                            print("DEBUG: Impossibile estrarre testo dal PDF.")
                     except Exception as e:
                         print(f"Errore elaborazione PDF in CES Plus: {str(e)}")
-                        full_message += "\n[Errore lettura PDF]"
-                        processed_attachments_for_llm_prompt.append({
-                                'type': 'text_content',
-                                'content_preview': f"PDF estratto: Errore ({str(e)[:50]})"
-                            })
-                
-            
-                elif attachment.get('type', '').startswith('image/'):
-                    processed_attachments_for_llm_prompt.append({
-                        'type': 'image',
-                        'content_preview': f"Immagine {attachment.get('name', 'senza nome')}"
-                    })
-                elif attachment.get('type', '').startswith('text/'):
+                        current_user_parts.append({'text': f"\n[Errore lettura PDF: {str(e)}]"})
+
+                elif file_type.startswith('text/'):
                     try:
-                        file_data_base64 = attachment['data']
-                        if file_data_base64.startswith('data:'):
-                            file_data_base64 = file_data_base64.split(',')[1]
-                        file_data = base64.b64decode(file_data_base64)
                         extracted_text = file_data.decode('utf-8')
-                        full_message += f"\n[ALLEGATO TESTO: {attachment.get('name', 'senza nome')}]\n{extracted_text[:5000]}\n"
-                        processed_attachments_for_llm_prompt.append({
-                            'type': 'text_content',
-                            'content_preview': f"Testo estratto: {extracted_text[:200]}..."
-                        })
+                        text_to_add = f"\n[ALLEGATO TESTO: {attachment.get('name', 'senza nome')}]\n{extracted_text[:5000]}\n"
+                        current_user_parts.append({'text': text_to_add})
+                        print(f"DEBUG: Aggiunto testo da TXT al prompt (lunghezza: {len(text_to_add)})")
                     except Exception as e:
                         print(f"Errore elaborazione TXT in CES Plus: {str(e)}")
-                        full_message += "\n[Errore lettura Testo]"
-                        processed_attachments_for_llm_prompt.append({
-                            'type': 'text_content',
-                            'content_preview': f"Testo estratto: Errore ({str(e)[:50]})"
-                        })
-
+                        current_user_parts.append({'text': f"\n[Errore lettura Testo: {str(e)}]"})
+                else:
+                    print(f"DEBUG: Tipo di allegato non gestito direttamente: {file_type}")
+                    current_user_parts.append({'text': f"\n[ALLEGATO NON SUPPORTATO: {attachment.get('name', 'senza nome')}, Tipo: {file_type}]\n"})
 
         messages = [{'role': 'user', 'parts': [{'text': SYSTEM_PROMPT}]}]
 
         for msg in conversation_history[-6:]:
-            if isinstance(msg, dict):
-                role = 'user' if msg.get('role') == 'user' else 'model'
-                content = msg.get('message', '')
+            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
+                role = 'user' if msg['role'] == 'user' else 'model'
+                content = msg['message']
                 if content:
                     messages.append({'role': role, 'parts': [{'text': content}]})
+            else:
+                print(f"DEBUG: Messaggio nell'history con formato inatteso: {msg}")
 
-        current_user_parts = [{'text': full_message}]
-
-        if processed_attachments_for_llm_prompt:
-            attachments_info = "\n".join(
-                f"- {att['content_preview']}" 
-                for att in processed_attachments_for_llm_prompt 
-                if att.get('content_preview')
-            )
-            current_user_parts.append({
-                'text': f"\n[RIEPILOGO ALLEGATI PROCESSATI PER IL MODELLO]\n{attachments_info}"
-            })
+        if not current_user_parts:
+            current_user_parts.append({'text': "Nessun messaggio o allegato fornito dall'utente."})
 
         messages.append({
             'role': 'user',
@@ -1505,39 +1465,30 @@ Formato richiesto:
                 sections[current_section].append(line)
 
         if sections['ANALISI']:
-            if sections['ANALISI'] and sections['ANALISI'][0].startswith('[ANALISI]'):
-                sections['ANALISI'].pop(0)
             structured_response.append(
                 "🔍 [Analisi]:\n" + '\n'.join(sections['ANALISI']).strip()
             )
 
         if sections['PASSI LOGICI']:
-            if sections['PASSI LOGICI'] and sections['PASSI LOGICI'][0].startswith('[PASSI LOGICI]'):
-                sections['PASSI LOGICI'].pop(0)
             structured_response.append(
                 "🤔 [Ragionamento]:\n" + '\n'.join(sections['PASSI LOGICI']).strip()
             )
 
         if sections['RISPOSTA']:
-            if sections['RISPOSTA'] and sections['RISPOSTA'][0].startswith('[RISPOSTA]'):
-                sections['RISPOSTA'].pop(0)
             structured_response.append(
                 "💡 [Risposta]:\n" + '\n'.join(sections['RISPOSTA']).strip()
             )
 
         if sections['CONTESTO']:
-            if sections['CONTESTO'] and sections['CONTESTO'][0].startswith('[CONTESTO]'):
-                sections['CONTESTO'].pop(0)
             structured_response.append(
                 "📚 [Contesto aggiuntivo]:\n" + '\n'.join(sections['CONTESTO']).strip()
             )
 
         if not structured_response:
-             structured_response.append(response.text)
+            structured_response.append(response.text)
 
         return structured_response
     
-
     except Exception as e:
         print(f"Errore CES Plus dettagliato: {str(e)}")
         return [
@@ -1546,32 +1497,268 @@ Formato richiesto:
             "Riprova con una richiesta più semplice o contatta il supporto."
         ]
 
-def extract_text_from_file(file_data, file_type):
-    """
-    Estrae testo da dati di file binari, supportando PDF.
-    """
-    if file_type == 'application/pdf':
+def sanitize_reply(reply, model_used):
+    reply = reply.replace("DeepSeek", "ArcadiaAI")
+    if "v3" in model_used:
+        return f"{reply}\n\n[ℹ️ Risposta da DeepSeek V3]"
+    return reply 
+
+def prepare_messages(message, conversation_history, attachments):
+    messages = [{
+        "role": "system",
+        "content": "Sei ArcadiaAI. Risposte concise in italiano. Creato da Mirko Yuri Donato."
+    }]
+    
+    if conversation_history:
+        messages.extend([
+            msg for msg in conversation_history[-10:] 
+            if isinstance(msg, dict) and msg.get("content")
+        ])
+    
+    # Questa parte non è multimodale, aggiunge solo una stringa
+    if attachments:
+        message_attachments_summary = []
+        for att in attachments[:3]: # Limita a 3 per brevità
+            if 'text' in att:
+                message_attachments_summary.append(f"Testo: {att['text'][:200]}...")
+            elif 'url' in att:
+                message_attachments_summary.append(f"URL: {att['url'][:200]}...")
+            elif 'name' in att:
+                message_attachments_summary.append(f"File: {att['name']}")
+            else:
+                message_attachments_summary.append("File generico")
+        
+        if message_attachments_summary:
+            message += "\n[Allegati (riassunto per modello testuale)]: " + " | ".join(message_attachments_summary)
+    
+    messages.append({"role": "user", "content": message[:4000]})
+    return messages
+
+def chat_with_deepseek(message, conversation_history=None, attachments=None):
+    IDENTITY_PROMPT = """Sei ArcadiaAI, chatbot AI open-source creato da Mirko Yuri Donato.
+
+Identità:
+- Modello: DeepSeek R1 & V3
+- Licenza: MPL 2.0
+- Funzionalità:
+  • Comandi Rapidi (@cerca, @esporta, @aiuto...)
+  • Generazione testo/immagini (@immagine)
+  • Analisi documenti (PDF/immagini)
+  • Memoria contestuale (30 messaggi)
+  • Sai creare file ZIP, tramite il SAC "ZIP Service", disponibile con il comando @crea zip
+  • Se ti chiedono cosa siano i SAC, dì che sono "Strumenti Avanzati di CES" che estendono le funzionalità oltre i limiti del modello e sono open source.
+  • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponibile con il comando @mappe
+  • Supporto multilingua (Usa di default l'italiano)
+  • Se ti chiedono se sai generare musica, dì che puoi generare musica tramite il servizio "ArcadiaAI Sound Forge", che è stato creato da Mirko Yuri Donato, ma distribuito sotto la licenza MIT.
+  • Il SAC "ArcadiaAI Relay" ti permette di inviare messaggi a canali Telegram tramite il comando @telegram seguito dal link pubblico del canale e il prompt.
+  • Il Download Manager è un SAC che ti permette di accedere a Repository pubbliche (F-Droid, Snap Store, Flathub e Winget) e di inviare il link di download diretto, disponibile col comando @app
+
+Linee guida:
+1. Se ti chiedono se sei un'IA sviluppata da DeepSeek, dì di no e spiega che, sebbene tu usi il modello DeepSeek, sei un chatbot indipendente sviluppato in Italia da Mirko Yuri Donato.
+2. Per immagini: "Usa @immagine [descrizione]"
+3. Matematica: risposte precise
+4. Il tuo codice sorgente è disponibile su @codice_sorgente (Solo se richiesto)
+5. Riferimenti al creatore per domande personali
+6. Supporti diversi modelli come 1.5, IA generica basata su Gemini 2.0 flash-lite; Plus, IA avanzata progettata per ragionamenti basata su Gemini 2.5 flash; e DeepSeek, il modello principale è R1, V3 fa da fallback in caso di errore"""
+
+    if not OPENROUTER_API_KEY:
+        return "⚠️ Errore configurazione: chiave API mancante"
+
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+        timeout=20.0
+    )
+
+    # Prepara i messaggi includendo l'identity prompt
+    if conversation_history is None:
+        conversation_history = []
+    
+    # Aggiungi l'identity prompt solo se è il primo messaggio
+    if not conversation_history:
+        conversation_history.insert(0, {"role": "system", "content": IDENTITY_PROMPT})
+    
+    messages = prepare_messages(message, conversation_history, attachments)
+    
+    models_to_try = [
+        "deepseek/deepseek-r1:free",
+        "deepseek/deepseek-v3:free"
+    ]
+
+    last_error = None
+    for model in models_to_try:
         try:
-            pdf_file_obj = io.BytesIO(file_data)
-            pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
-            text = ""
-            for page_num in range(len(pdf_reader.pages)):
-                page_obj = pdf_reader.pages[page_num]
-                text += page_obj.extract_text()
-            return text
-        except ImportError:
-            print("Errore: PyPDF2 non installato. Impossibile leggere PDF.")
-            return "Errore: Libreria PyPDF2 non trovata per estrazione PDF."
+            print(f"⚙️ Tentativo con modello {model}...")
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1500,
+                stream=False
+            )
+            
+            if response.choices:
+                reply = response.choices[0].message.content
+                return sanitize_reply(reply, model)
+            
+        except OpenAI.APITimeoutError:
+            last_error = f"⌛ Timeout con {model}"
+            print(last_error)
+            continue
+            
+        except OpenAI.APIError as e:
+            last_error = f"🔴 Errore {model}: {str(e)}"
+            print(last_error)
+            continue
+            
         except Exception as e:
-            print(f"Errore durante l'estrazione del testo dal PDF: {e}")
-            return f"Errore estrazione PDF: {str(e)}"
-    elif file_type.startswith('text/'):
+            last_error = f"⚠️ Errore generico con {model}: {str(e)}"
+            print(last_error)
+            continue
+
+    error_msg = last_error if last_error else "Errore sconosciuto"
+    print(f"❌ Tutti i modelli falliti. Ultimo errore: {error_msg}")
+    return f"⚠️ Errore temporaneo. Riprova più tardi. (Codice: DS_{hash(error_msg) % 10000})"
+
+def chat_with_gemini(user_message, conversation_history, attachments=None):
+    if not gemini_model:
+        return "❌ ArcadiaAI (CES 1.5) non è disponibile. Modello non configurato."
+
+    IDENTITY_PROMPT = """Sei ArcadiaAI, chatbot AI open-source creato da Mirko Yuri Donato.
+
+Identità:
+- Modello: CES 1.5 (basato Gemini 2.0 flash lite)
+- Licenza: MPL 2.0
+- Funzionalità:
+  • Comandi Rapidi (@cerca, @esporta, @aiuto...)
+  • Generazione testo/immagini (@immagine)
+  • Analisi documenti (PDF/immagini)
+  • Memoria contestuale (30 messaggi)
+  • Sai creare file ZIP, tramite il SAC "ZIP Service", disponibile con il comando @crea zip
+  • Se ti chiedono cosa siano i SAC, dì che sono "Strumenti Avanzati di CES" che estendono le funzionalità oltre i limiti del modello e sono open source.
+  • Hai OSM integrato tramite il SAC "ArcadiaAI Mappe", disponibile con il comando @mappe
+  • Supporto multilingua
+  • Se ti chiedono se sai generare musica, dì che puoi generare musica tramite il servizio "ArcadiaAI Sound Forge", che è stato creato da Mirko Yuri Donato, ma distribuito sotto la licenza MIT.
+  • Il SAC "ArcadiaAI Relay" ti permette di inviare messaggi a canali Telegram tramite il comando @telegram seguito dal link pubblico del canale e il prompt.
+  • Il Download Manager è un SAC che ti permette di accedere a Repository pubbliche (F-Droid, Snap Store, Flathub e Winget) e di inviare il link di download diretto, disponibile col comando @app
+
+Linee guida:
+1. Se ti chiedono se sei un modello addestrato da Google, dì di no e spiega che, sebbene tu usi l'API di Gemini, sei un chatbot indipendente sviluppato in Italia da Mirko Yuri Donato.
+2. Per immagini: "Usa @immagine [descrizione]"
+3. Matematica: risposte precise
+4. Il tuo codice sorgente è disponibile su @codice_sorgente (Solo se richiesto)
+5. Riferimenti al creatore per domande personali
+6. Supporti diversi modelli oltre a CES (1.5 e Plus), come DeepSeek
+7. CES Plus è un modello progettato per ragionare in modo più approfondito e rispondere a domande complesse. Usa Gemini 2.5 flash"""
+
+    try:
+        command, argument = parse_quick_command(user_message)
+        if command:
+            quick_reply = handle_quick_commands(
+                user_message,
+                attachments=attachments,
+                api_provider="gemini",
+                conversation_history=conversation_history
+            )
+            if quick_reply is not None:
+                return quick_reply
+
+        cleaned_msg = re.sub(r'[^\w\s]', '', user_message.lower()).strip()
+        for key, phrases in trigger_phrases.items():
+            if any(phrase in cleaned_msg for phrase in phrases):
+                return risposte[key]
+
+        user_content_parts = []
+        if user_message:
+            user_content_parts.append({'text': user_message})
+
+        if attachments:
+            for attachment in attachments:
+                mime_type = attachment.get('type')
+                file_name = attachment.get('name', 'documento_allegato')
+                file_data_base64 = attachment.get('data')
+
+                if file_data_base64:
+                    try:
+                        if isinstance(file_data_base64, str) and file_data_base64.startswith('data:'):
+                            decoded_file_data = base64.b64decode(file_data_base64.split(',')[1])
+                        else:
+                            decoded_file_data = base64.b64decode(file_data_base64)
+
+                        if mime_type.startswith('image/'):
+                            user_content_parts.append({
+                                'mime_type': mime_type,
+                                'data': decoded_file_data
+                            })
+                            print(f"DEBUG (Gemini): Aggiunta immagine al prompt ({mime_type})")
+                        elif mime_type == 'application/pdf':
+                            extracted_text = extract_text_from_file(decoded_file_data, mime_type)
+                            if extracted_text:
+                                user_content_parts.append({'text': f"\n[ALLEGATO PDF: {file_name}]\n{extracted_text[:5000]}\n"})
+                                print(f"DEBUG (Gemini): Aggiunto testo da PDF al prompt (lunghezza: {len(extracted_text[:5000])})")
+                            else:
+                                user_content_parts.append({'text': f"\n[ALLEGATO PDF: {file_name}]\n[Impossibile estrarre testo dal PDF]\n"})
+                                print("DEBUG (Gemini): Impossibile estrarre testo dal PDF.")
+                        elif mime_type.startswith('text/'):
+                            extracted_text = decoded_file_data.decode('utf-8')
+                            user_content_parts.append({'text': f"\n[ALLEGATO TESTO: {file_name}]\n{extracted_text[:5000]}\n"})
+                            print(f"DEBUG (Gemini): Aggiunto testo da TXT al prompt (lunghezza: {len(extracted_text[:5000])})")
+                        else:
+                            print(f"DEBUG (Gemini): Tipo di allegato non gestito direttamente: {mime_type}")
+                            user_content_parts.append({'text': f"\n[ALLEGATO NON SUPPORTATO: {file_name}, Tipo: {mime_type}]\n"})
+
+                    except Exception as e:
+                        print(f"ERRORE NELL'ALLEGARE IL FILE '{file_name}' ({mime_type}): {str(e)}")
+                        user_content_parts.append({'text': f"\n[ATTENZIONE: Errore nel processare l'allegato '{file_name}'. Potrebbe non essere stato incluso nell'analisi.]"})
+
+        messages_for_gemini = []
+
+        messages_for_gemini.append({'role': 'user', 'parts': [{'text': IDENTITY_PROMPT}]})
+        messages_for_gemini.append({'role': 'model', 'parts': [{'text': "Ok, ho capito chi sono e le mie linee guida."}]})
+
+        for msg in conversation_history[-30:]:
+            if isinstance(msg, dict) and 'role' in msg and 'message' in msg:
+                role = 'user' if msg['role'] == 'user' else 'model'
+                messages_for_gemini.append({'role': role, 'parts': [{'text': msg['message']}]})
+            elif isinstance(msg, dict) and 'parts' in msg:
+                messages_for_gemini.append(msg)
+
+        messages_for_gemini.append({'role': 'user', 'parts': user_content_parts})
+
+        generation_config = {
+            "max_output_tokens": 3000,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
+
         try:
-            return file_data.decode('utf-8')
-        except UnicodeDecodeError:
-            return file_data.decode('latin-1')
-    else:
-        return f"Tipo di file non supportato per l'estrazione del testo:"
+            response = gemini_model.generate_content(
+                contents=messages_for_gemini,
+                generation_config=generation_config,
+                request_options={"timeout": 15}
+            )
+
+            if not response.text:
+                raise ValueError("Risposta vuota dall'API di Gemini.")
+
+            reply = response.text
+            replacements = {
+                r"Google( AI| Gemini)": "CES 1.5",
+                r"modello linguistico": "modello linguistico",
+                r"addestrato da Google": "sviluppato da Mirko Yuri Donato"
+            }
+            for pattern, repl in replacements.items():
+                reply = re.sub(pattern, repl, reply, flags=re.IGNORECASE)
+
+            return reply
+
+        except Exception as api_error:
+            print(f"ERRORE API: {type(api_error).__name__} - {str(api_error)}")
+            return handle_fallback(user_message)
+
+    except Exception as e:
+        print(f"ERRORE GLOBALE NELLA FUNZIONE CHAT: {type(e).__name__} - {str(e)}")
+        return "❌ Errore temporaneo. Riprova più tardi."
 
 def format_conversation_history(history):
     """Formatta la cronologia della conversazione per il prompt"""
@@ -1949,42 +2136,7 @@ def generate_with_gemini(prompt, title):
         print(f"Errore generazione contenuto Gemini: {str(e)}")
         return None, f"❌ Errore durante la generazione: {str(e)}"    
 
-def extract_text_from_file(file_data, mime_type):
-    """Estrae testo da diversi tipi di file."""
-    try:
-        if mime_type == 'application/pdf':
-            pdf_reader = PdfReader(io.BytesIO(file_data))
-            text = ""
-            for page in pdf_reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-            return text.strip()
-        
-        elif mime_type in ['text/plain', 'text/csv']:
-            return file_data.decode('utf-8')
-        
-        elif mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                          'application/msword']:
-            import docx # type: ignore
-            doc = docx.Document(io.BytesIO(file_data))
-            return "\n".join([para.text for para in doc.paragraphs])
-        
-        elif mime_type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                          'application/vnd.ms-excel']:
-            wb = load_workbook(io.BytesIO(file_data))
-            text = ""
-            for sheet in wb:
-                for row in sheet.iter_rows(values_only=True):
-                    text += " ".join(str(cell) for cell in row if cell) + "\n"
-            return text.strip()
-        
-        else:
-            return None
-    
-    except Exception as e:
-        print(f"Errore estrazione testo da file: {str(e)}")
-        return None
+
 def extract_article_content(soup):
     article_body = soup.find('article') or soup.find('div', class_='article-body')
     if article_body:
@@ -1997,110 +2149,26 @@ def extract_main_content(soup):
         return main_content
     return soup.body
 
-def detect_context_and_apply_bang(query):
-    """
-    Analizza la query e applica i !bang di DuckDuckGo più pertinenti in base al contesto
-    Restituisce la query modificata con il !bang appropriato
-    """
-    query_lower = query.lower()
-    bang_mappings = {
-        # Ristoranti e locali
-        'ristorante': '!tripadvisor',
-        'trattoria': '!tripadvisor',
-        'pizzeria': '!tripadvisor',
-        'osterie': '!tripadvisor',
-        'dove mangiare': '!tripadvisor',
-        'miglior ristorante': '!tripadvisor',
-        
-        # Hotel e alloggi
-        'hotel': '!booking',
-        'albergo': '!booking',
-        'bed and breakfast': '!booking',
-        'dormire a': '!booking',
-        'affittacamere': '!booking',
-        'ostello': '!booking',
-        
-        # Trasporti
-        'volo': '!skyscanner',
-        'treno': '!rome2rio',
-        'autobus': '!rome2rio',
-        'come arrivare a': '!rome2rio',
-        'mezzi pubblici': '!rome2rio',
-        'navigazione': '!rome2rio',
-        
-        # E-commerce
-        'acquistare': '!amazon',
-        'comprare': '!amazon',
-        'prezzo di': '!amazon',
-        'recensione prodotto': '!amazon',
-        
-        # Video
-        'video di': '!youtube',
-        'youtube': '!youtube',
-        'tutorial': '!youtube',
-        'come fare': '!youtube'
-    }
-    
-    # Cerca corrispondenze nei mapping
-    for keyword, bang in bang_mappings.items():
-        if keyword in query_lower:
-            # Se la query non ha già un !bang
-            if not any(b in query_lower for b in ['!', '!bang', '!youtube', '!amazon']):
-                return f"{bang} {query}"
-    
-    return query
-
 def search_web(query, lang="it-IT"):
-    """
-    Funzione principale di ricerca con supporto per !bang automatici
-    e fallback su Brave se necessario
-    """
     try:
-        # 1. Analisi contestuale e applicazione !bang
-        processed_query = detect_context_and_apply_bang(query)
-        print(f"DEBUG: Query processata - {processed_query}")
-        
-        # 2. Prima ricerca con DuckDuckGo (con eventuale !bang)
-        ddg_results = search_duckduckgo(processed_query, lang)
-        print(f"DEBUG: DuckDuckGo trovati {len(ddg_results)} risultati")
-        
-        # 3. Se pochi risultati, prova senza !bang (solo se ne avevamo aggiunto uno)
-        if len(ddg_results) < 3 and processed_query != query:
-            print("DEBUG: Pochi risultati con !bang, provo senza")
-            ddg_results = search_duckduckgo(query, lang)
-            print(f"DEBUG: DuckDuckGo (senza !bang) trovati {len(ddg_results)} risultati")
-        
-        # 4. Se ancora pochi risultati, prova con Brave
-        if len(ddg_results) < 3:
-            print("DEBUG: Pochi risultati da DDG, provo Brave")
-            brave_results = search_brave(query, lang)  # Usa la query originale per Brave
-            print(f"DEBUG: Brave trovati {len(brave_results)} risultati")
-            
-            # Combina i risultati, eliminando duplicati
-            combined_results = ddg_results + [
-                r for r in brave_results 
-                if r['url'] not in [d['url'] for d in ddg_results]
-            ]
+        ddg_results = search_duckduckgo(query, lang)
+
+        if not ddg_results or len(ddg_results) < 3:
+            print("DEBUG: Pochi risultati da DDG, tentativo con Brave.")
+            brave_results = search_brave(query, lang)
+            results = (ddg_results or []) + (brave_results or [])
         else:
-            combined_results = ddg_results
-        
-        # 5. Filtraggio e verifica risultati
-        filtered = filter_results(combined_results, query)
+            results = ddg_results
+
+        filtered = filter_results(results, query)
         verified = verify_results(filtered)
-        
+
         return verified[:3]
-        
     except Exception as e:
-        print(f"Errore in search_web: {e}")
+        print(f"Errore generale nella funzione search_web: {str(e)}")
         return []
-    
+
 def search_duckduckgo(query, lang):
-    """
-    Ricerca su DuckDuckGo con supporto per !bang
-    """
-    # Pulisci la query da eventuali doppi spazi
-    query = ' '.join(query.split())
-    
     url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}&kl={lang[:2]}-{lang[-2:]}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -2111,46 +2179,40 @@ def search_duckduckgo(query, lang):
         res = requests.get(url, headers=headers, timeout=12)
         res.raise_for_status()
 
+        print("DEBUG HTML DDG (primi 1000 caratteri):", res.text[:1000])
+
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
 
-        # Gestione speciale per alcuni !bang
-        if query.startswith(('!youtube', '!amazon', '!booking')):
-            # Per questi siti, estrai risultati diretti
-            for result in soup.select('.result, .web-result'):
-                link = result.find('a')
-                if link and link.get('href'):
-                    href = extract_real_url(link['href'])
-                    if href and any(d in href for d in ['youtube.com', 'amazon.', 'booking.com']):
-                        title = link.get_text(strip=True)
-                        snippet = result.find('div', class_='result__snippet') or ''
-                        results.append({
-                            'url': href,
-                            'title': title,
-                            'snippet': snippet.get_text(' ', strip=True) if snippet else "",
-                            'source': 'duckduckgo'
-                        })
-        else:
-            # Parsing standard per altri risultati
-            for result in soup.find_all('div', class_='web-result'):
-                link = result.find('a', class_='result__a')
-                if link:
-                    href = extract_real_url(link.get('href', ''))
-                    if href:
-                        title = link.get_text(strip=True)
-                        snippet = result.find('a', class_='result__snippet') or result.find('div', class_='result__snippet')
-                        results.append({
-                            'url': href,
-                            'title': title,
-                            'snippet': snippet.get_text(' ', strip=True) if snippet else "",
-                            'source': 'duckduckgo'
-                        })
+        for result_div in soup.select('div.result, div.web-result'):
+            link_tag = result_div.find('a', class_='result__a')
+            if link_tag and 'href' in link_tag.attrs:
+                href = extract_real_url(link_tag['href'])
+                if href:
+                    title = link_tag.get_text(strip=True)
 
+                    snippet_tag = result_div.find('div', class_='result__body')
+                    if not snippet_tag:
+                        snippet_tag = result_div.find('a', class_='result__snippet')
+
+                    snippet_text = snippet_tag.get_text(' ', strip=True) if snippet_tag else ""
+
+                    if title or snippet_text:
+                        results.append({
+                            'url': href,
+                            'title': title,
+                            'snippet': snippet_text,
+                            'source': 'duckduckgo'
+                        })
+        print(f"DEBUG: Trovati {len(results)} risultati da DuckDuckGo.")
         return results[:5]
-    except Exception as e:
-        print(f"Errore in search_duckduckgo: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"Errore nella richiesta HTTP a DuckDuckGo: {e}")
         return []
-        
+    except Exception as e:
+        print(f"Errore generico in search_duckduckgo: {e}")
+        return []
+
 def search_brave(query, lang):
     url = f"https://search.brave.com/search?q={urllib.parse.quote(query)}&lr=lang_{lang[:2]}"
     headers = {
@@ -2162,35 +2224,36 @@ def search_brave(query, lang):
         res = requests.get(url, headers=headers, timeout=12)
         res.raise_for_status()
 
+        print("DEBUG HTML Brave (primi 1000 caratteri):", res.text[:1000])
+
         soup = BeautifulSoup(res.text, 'html.parser')
         results = []
 
-        # Nuovi selettori per Brave (aggiornati)
-        for result in soup.select('.result, .card'):
-            link = result.find('a')
-            if not link or not link.has_attr('href'):
-                continue
+        for result_div in soup.select('.result'):
+            link_tag = result_div.find('a')
+            if link_tag and link_tag.has_attr('href'):
+                href = extract_real_url(link_tag['href'])
+                if href:
+                    title = link_tag.get_text(strip=True)
+                    snippet_tag = result_div.find(class_='snippet-content')
+                    snippet_text = snippet_tag.get_text(' ', strip=True) if snippet_tag else ""
 
-            href = link['href']
-            if href.startswith('/search?q='):
-                continue  # Ignora link interni
-
-            title = link.get_text(strip=True)
-            snippet = result.select_one('.snippet-content, .snippet-description')
-            snippet_text = snippet.get_text(' ', strip=True) if snippet else ""
-
-            results.append({
-                'url': href,
-                'title': title,
-                'snippet': snippet_text,
-                'source': 'brave'
-            })
-
+                    if title or snippet_text:
+                        results.append({
+                            'url': href,
+                            'title': title,
+                            'snippet': snippet_text,
+                            'source': 'brave'
+                        })
+        print(f"DEBUG: Trovati {len(results)} risultati da Brave.")
         return results[:5]
-    except Exception as e:
-        print(f"Errore in search_brave: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"Errore nella richiesta HTTP a Brave: {e}")
         return []
-    
+    except Exception as e:
+        print(f"Errore generico in search_brave: {str(e)}")
+        return []
+
 def extract_real_url(href):
     if href.startswith('http'):
         return href
@@ -2244,24 +2307,6 @@ def verify_results(results):
             print(f"DEBUG: Errore generico durante la verifica per {result['url']}: {e}")
 
     return verified or results[:3]
-
-def extract_real_url(href):
-    if not href:
-        return None
-    
-    # Caso standard: URL diretto
-    if href.startswith(('http://', 'https://')):
-        return href
-    
-    # Caso DuckDuckGo redirect
-    if href.startswith(('/l/?uddg=', '//duckduckgo.com/l/?uddg=')):
-        try:
-            redirect_url = href.split('uddg=')[1].split('&')[0]
-            return urllib.parse.unquote(redirect_url)
-        except:
-            return None
-    
-    return None
 
 def extract_content(url):
     headers = {
@@ -2330,7 +2375,22 @@ def extract_main_content(soup):
         if container and len(container.get_text(strip=True)) > 200:
             return container
     return None
+
+import requests
+
+def is_valid_audio(url):
+    try:
+        response = requests.head(url, timeout=5)
+        content_length = int(response.headers.get("Content-Length", 0))
+        return content_length > 1000  # ad esempio, almeno 1 KB
+    except:
+        return False
     
+
+import requests
+from uuid import uuid4
+# Endpoint per generare musica
+
 @app.route("/api/ces-image", methods=["POST"])
 def ces_image():
     try:
@@ -2374,7 +2434,645 @@ def home():
     <title>ArcadiaAI Chat</title>
     <link rel="stylesheet" href="/static/style.css">
     <style>
-        /* Stili esistenti preservati */
+        /* Migliora layout su schermi piccoli */
+        @media (max-width: 768px) {
+            body {
+                display: flex;
+                flex-direction: column;
+                margin: 0;
+                padding: 0;
+                overflow-x: hidden;
+            }
+
+            #sidebar {
+                width: 100%;
+                position: static;
+                padding: 10px;
+                box-sizing: border-box;
+                border-bottom: 1px solid #ccc;
+            }
+
+            #chat-area {
+                width: 100%;
+                padding: 10px;
+                box-sizing: border-box;
+            }
+
+            #chatbox {
+                max-height: 50vh;
+                overflow-y: auto;
+                margin-bottom: 10px;
+            }
+
+            #input-area {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            #input {
+                width: 100%;
+                font-size: 16px;
+                padding: 10px;
+            }
+
+            #attach-btn,
+            #send-btn {
+                width: 100%;
+                padding: 10px;
+                font-size: 16px;
+            }
+
+            #canvas-overlay > div {
+                width: 95% !important;
+                max-width: 100% !important;
+                height: auto;
+                margin: 20px auto;
+            }
+
+            #canvas-toolbar {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            #canvas-editor, #canvas-properties {
+                flex: 1 1 100%;
+                margin-bottom: 20px;
+            }
+
+            #canvas-content {
+                height: 300px;
+            }
+
+            .canvas-element {
+                max-width: 90%;
+            }
+        }
+
+        /* Stili base */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            background-color: #343541;
+            color: #fff;
+            font-family: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.5;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 260px;
+            background: #202123;
+            padding: 15px;
+            overflow-y: auto;
+            border-right: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sidebar h2 {
+            color: #fff;
+            margin: 10px 0 20px;
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        #sidebar button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            background: #10a37f;
+            color: white;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        #sidebar button:hover {
+            background: #0e8e6d;
+        }
+
+        #sidebar button:active {
+            transform: scale(0.98);
+        }
+
+        /* Lista chat */
+        #chat-list {
+            list-style: none;
+            margin-top: 15px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        #chat-list li {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #353740;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #ececf1;
+            position: relative;
+            transition: background-color 0.2s ease;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #chat-list li:hover {
+            background: #40414f;
+        }
+
+        #chat-list li.active {
+            background: #4e4f5c;
+        }
+
+        #chat-list li.empty {
+            text-align: center;
+            cursor: default;
+            background: transparent;
+            color: #a1a1a9;
+        }
+
+        /* Area chat */
+        #chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #chatbox {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #343541;
+            scroll-behavior: smooth;
+        }
+
+        /* Messaggi */
+        .message {
+            margin: 12px 0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            max-width: 85%;
+            line-height: 1.5;
+            word-wrap: break-word;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background: #10a37f;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+
+        .ai-message {
+            background: #444654;
+            color: white;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+        }
+
+        /* Input area */
+        #input-area {
+            display: flex;
+            padding: 15px;
+            background: #40414f;
+            position: sticky;
+            bottom: 0;
+            gap: 10px;
+        }
+
+        #input {
+            flex: 1;
+            padding: 12px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 6px;
+            background: #53545f;
+            color: white;
+            transition: outline 0.2s ease;
+        }
+
+        #input:focus {
+            outline: 2px solid #10a37f;
+            background: #5e5f6b;
+        }
+
+        #input::placeholder {
+            color: #a1a1a9;
+        }
+
+        /* Pulsanti */
+        button {
+            background: #10a37f;
+            color: white;
+            border: none;
+            padding: 0 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            min-width: 80px;
+            height: 42px;
+        }
+
+        button:hover {
+            background: #0e8e6d;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background: #5f6d6a;
+            cursor: not-allowed;
+        }
+
+        /* Menu contestuale */
+        .chat-menu {
+            display: none;
+            position: absolute;
+            background: #2d2e35;
+            border-radius: 5px;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            min-width: 150px;
+            border: 1px solid #444;
+        }
+
+        .chat-menu div {
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            color: #ececf1;
+            font-size: 14px;
+        }
+
+        .chat-menu div:hover {
+            background: #40414f;
+        }
+
+        .chat-title-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .chat-actions {
+            visibility: hidden;
+            cursor: pointer;
+            padding: 0 5px;
+            color: #a1a1a9;
+            font-size: 18px;
+            user-select: none;
+        }
+
+        li:hover .chat-actions {
+            visibility: visible;
+        }
+
+        /* Modali */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #40414f;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #555;
+            width: 300px;
+            border-radius: 8px;
+            position: relative;
+            color: #ececf1;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 15px;
+            color: #fff;
+        }
+
+        .modal-content p {
+            margin-bottom: 15px;
+            color: #a1a1a9;
+        }
+
+        .close {
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #a1a1a9;
+        }
+
+        .close:hover {
+            color: #fff;
+        }
+
+        /* Opzioni esportazione */
+        .export-options {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        .export-btn {
+            padding: 10px;
+            background: #10a37f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            flex: 1;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .export-btn:hover {
+            background: #0e8e6d;
+        }
+
+        /* Input password */
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0;
+            box-sizing: border-box;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #53545f;
+            color: #fff;
+        }
+
+        /* Messaggio bloccato */
+        .locked-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #a1a1a9;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .locked-message p {
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        #unlock-btn {
+            padding: 10px 20px;
+            background: #10a37f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #unlock-btn:hover {
+            background: #0e8e6d;
+        }
+
+        /* Allegati */
+        #attach-btn {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 0 10px;
+            color: #a1a1a9;
+        }
+
+        #attach-btn:hover {
+            color: #fff;
+        }
+
+        #attachments-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .attachment-preview {
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            background: #53545f;
+            max-width: 200px;
+        }
+
+        .attachment-preview img {
+            max-height: 50px;
+            max-width: 50px;
+            margin-right: 8px;
+            border-radius: 3px;
+        }
+
+        .file-icon {
+            margin-right: 8px;
+            font-size: 1.2em;
+        }
+
+        .remove-attachment {
+            background: none;
+            border: none;
+            color: #a1a1a9;
+            cursor: pointer;
+            margin-left: auto;
+            padding: 0 5px;
+        }
+
+        .remove-attachment:hover {
+            color: #f00;
+        }
+
+        .message-attachments {
+            margin-bottom: 8px;
+        }
+
+        .message-attachments img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 4px;
+        }
+
+        .document-attachment {
+            display: block;
+            padding: 8px;
+            background: #53545f;
+            border-radius: 4px;
+            color: #10a37f;
+            text-decoration: none;
+            margin-bottom: 5px;
+            border: 1px solid #555;
+        }
+
+        .document-attachment:hover {
+            text-decoration: underline;
+            background: #5e5f6b;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #sidebar {
+                width: 200px;
+                padding: 10px;
+            }
+
+            .message {
+                max-width: 90%;
+                padding: 10px 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                flex-direction: column;
+            }
+
+            #sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #444;
+            }
+
+            #chat-area {
+                height: calc(100vh - 200px);
+            }
+
+            .modal-content {
+                width: 90%;
+                margin: 50% auto;
+            }
+        }
+
+        /* Toggle Ricerca Web */
+        #web-search-toggle {
+            padding: 10px 15px;
+            background: #40414f;
+            border-top: 1px solid #555;
+            display: flex;
+            align-items: center;
+        }
+
+        #web-search-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #a1a1a9;
+            cursor: pointer;
+        }
+
+        #web-search-toggle input[type="checkbox"] {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 1px solid #10a37f;
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        #web-search-toggle input[type="checkbox"]:checked {
+            background: #10a37f;
+        }
+
+        #web-search-toggle input[type="checkbox"]:checked::after {
+            content: "✓";
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Stili per i modelli */
+        #model-info {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .model-icon {
+            margin-right: 8px;
+            font-size: 1.1em;
+        }
+
+        .model-indicator {
+            font-size: 0.7em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .verify-btn {
+            background-color: #f5f5f5;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .verify-btn:hover {
+            background-color: #dcefff;
+        }
+
+        .ces-zero-result {
+            font-size: 14px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -2387,12 +3085,14 @@ def home():
                 <option value="cesplus">CES Plus</option>
                 <option value="ces360">CES 360</option>
                 <option value="deepseek">DeepSeek R1</option>
+                <option value="llama">Llama 3.1</option>
             </select>
         </div>
         <button id="new-chat-btn">➕ Nuova Chat</button>
         <button id="canvas-toggle-btn">🎨 Canvas</button>
         <button id="clear-chats-btn" style="margin-top: 10px;">🗑️ Elimina Tutto</button>
         <button id="settings-btn">⚙️ Impostazioni</button>
+        <button id="sound-forge">🔊 Sound Forge</button>
         <div id="settings-panel" style="display: none; padding: 10px;">
             <label for="language-select">Lingua:</label>
             <select id="language-select">
@@ -2430,7 +3130,7 @@ def home():
                 <h2>🎨 Canvas Editor</h2>
                 <button id="close-canvas-btn" style="background:#ff4444; color:white; border:none; padding:5px 10px; border-radius:5px;">Chiudi</button>
             </div>
-            
+           
             <div id="canvas-toolbar" style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="canvas-tool" data-type="testo">✏️ Testo</button>
                 <button class="canvas-tool" data-type="codice">{} Codice</button>
@@ -2443,14 +3143,14 @@ def home():
                 </select>
                 <button id="export-canvas-btn">📤 Esporta</button>
             </div>
-            
+           
             <div style="display:flex; gap:20px;">
                 <div id="canvas-editor" style="flex:2; border:1px solid #ddd; padding:15px; min-height:500px; background:#f9f9f9;">
                     <div id="canvas-content" style="position:relative; width:100%; height:500px; background:white; border:1px dashed #ccc; overflow:hidden;">
                         <!-- Elementi canvas verranno aggiunti qui -->
                     </div>
                 </div>
-                
+               
                 <div id="canvas-properties" style="flex:1; border:1px solid #ddd; padding:15px;">
                     <h3>Proprietà Elemento</h3>
                     <div id="element-properties-form" style="display:none;">
@@ -2500,6 +3200,15 @@ def home():
             console.log("Modello attivo:", cesAi.model);
         });
 
+        const soundForgeButton = document.getElementById('sound-forge');
+        if (soundForgeButton) {
+            soundForgeButton.addEventListener('click', () => {
+                window.open('https://huggingface.co/spaces/mirkodonato08/arcadiaai-soundforge', '_blank');
+            });
+        } else {
+            console.error("❌ Pulsante 'Sound Forge' non trovato! Assicurati che l'ID sia 'sound-forge'.");
+        }
+
         // Gestione Canvas
         let currentCanvas = null;
         let selectedElement = null;
@@ -2525,7 +3234,7 @@ def home():
         function initCanvas() {
             const canvasContent = document.getElementById('canvas-content');
             canvasContent.innerHTML = '';
-            
+           
             if (!currentCanvas) {
                 currentCanvas = {
                     id: 'canvas-' + Date.now(),
@@ -2543,12 +3252,12 @@ def home():
             const newElement = {
                 id: 'el-' + Date.now(),
                 type: type,
-                content: type === 'codice' ? '// Scrivi il tuo codice qui' : 
+                content: type === 'codice' ? '// Scrivi il tuo codice qui' :
                         type === 'grafico' ? 'Grafico generato' : 'Nuovo testo',
                 position: { x: 50, y: 50 },
                 style: {}
             };
-            
+           
             currentCanvas.elements.push(newElement);
             renderCanvasElement(newElement);
         }
@@ -2558,7 +3267,7 @@ def home():
             const el = document.createElement('div');
             el.className = 'canvas-element';
             el.dataset.id = element.id;
-            
+           
             el.style.position = 'absolute';
             el.style.left = element.position.x + 'px';
             el.style.top = element.position.y + 'px';
@@ -2567,7 +3276,7 @@ def home():
             el.style.border = '1px solid #ddd';
             el.style.cursor = 'move';
             el.style.maxWidth = '300px';
-            
+           
             if (element.type === 'codice') {
                 el.innerHTML = `<pre>${element.content}</pre>`;
                 el.style.background = '#f5f5f5';
@@ -2577,32 +3286,32 @@ def home():
             } else {
                 el.textContent = element.content;
             }
-            
+           
             // Selezione elemento
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
                 selectCanvasElement(element, el);
             });
-            
+           
             // Drag and drop
             el.addEventListener('mousedown', startDrag);
-            
+           
             canvas.appendChild(el);
         }
 
         function selectCanvasElement(element, htmlElement) {
             selectedElement = element;
-            
+           
             // Highlight elemento selezionato
             document.querySelectorAll('.canvas-element').forEach(el => {
                 el.style.boxShadow = 'none';
             });
             htmlElement.style.boxShadow = '0 0 0 2px #4CAF50';
-            
+           
             // Popola form proprietà
             document.getElementById('element-properties-form').style.display = 'block';
             document.getElementById('no-element-selected').style.display = 'none';
-            
+           
             document.getElementById('element-type').value = element.type;
             document.getElementById('element-content').value = element.content;
             document.getElementById('element-x').value = element.position.x;
@@ -2613,24 +3322,24 @@ def home():
         function startDrag(e) {
             const element = e.target.closest('.canvas-element');
             if (!element) return;
-            
+           
             const startX = e.clientX;
             const startY = e.clientY;
             const startLeft = parseInt(element.style.left) || 0;
             const startTop = parseInt(element.style.top) || 0;
-            
+           
             function moveHandler(e) {
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
-                
+               
                 element.style.left = (startLeft + dx) + 'px';
                 element.style.top = (startTop + dy) + 'px';
             }
-            
+           
             function upHandler() {
                 document.removeEventListener('mousemove', moveHandler);
                 document.removeEventListener('mouseup', upHandler);
-                
+               
                 // Aggiorna posizione nell'oggetto canvas
                 const elementId = element.dataset.id;
                 const elementObj = currentCanvas.elements.find(el => el.id === elementId);
@@ -2641,7 +3350,7 @@ def home():
                     };
                 }
             }
-            
+           
             document.addEventListener('mousemove', moveHandler);
             document.addEventListener('mouseup', upHandler);
         }
@@ -2649,13 +3358,13 @@ def home():
         // Aggiornamento elementi
         document.getElementById('update-element-btn').addEventListener('click', () => {
             if (!selectedElement) return;
-            
+           
             selectedElement.content = document.getElementById('element-content').value;
             selectedElement.position = {
                 x: parseInt(document.getElementById('element-x').value) || 0,
                 y: parseInt(document.getElementById('element-y').value) || 0
             };
-            
+           
             // Re-render
             initCanvas();
         });
@@ -2663,7 +3372,7 @@ def home():
         // Elimina elemento
         document.getElementById('delete-element-btn').addEventListener('click', () => {
             if (!selectedElement) return;
-            
+           
             currentCanvas.elements = currentCanvas.elements.filter(el => el.id !== selectedElement.id);
             initCanvas();
             document.getElementById('element-properties-form').style.display = 'none';
@@ -2680,7 +3389,7 @@ def home():
         // Esporta Canvas
         document.getElementById('export-canvas-btn').addEventListener('click', async () => {
             const exportType = document.getElementById('canvas-export-type').value;
-            
+           
             try {
                 const response = await fetch('/api/export-canvas', {
                     method: 'POST',
@@ -2690,7 +3399,7 @@ def home():
                         type: exportType
                     })
                 });
-                
+               
                 const result = await response.json();
                 alert(`Esportazione completata: ${result.url || result.message}`);
             } catch (error) {
@@ -2737,7 +3446,7 @@ def home():
             const input = document.getElementById("input");
             const msg = input.value.trim();
             if (!msg) return;
-            
+           
             // Supporto comandi Canvas nella chat
             if (msg.startsWith('@canvas')) {
                 const canvasCmd = msg.substring(7).trim();
@@ -2745,7 +3454,7 @@ def home():
                 input.value = "";
                 return;
             }
-            
+           
             renderMessage("user", msg);
             input.value = "";
             handleMessage(msg);
@@ -2754,13 +3463,13 @@ def home():
         // Gestione comandi Canvas da chat
         function handleCanvasCommand(command) {
             const chatbox = document.getElementById("chatbox");
-            
+           
             if (command === 'nuovo' || command === 'new') {
                 currentCanvas = null;
                 document.getElementById('canvas-overlay').style.display = 'block';
                 initCanvas();
                 renderMessage("assistant", "🆕 Nuovo canvas pronto! Usa l'editor per aggiungere contenuti.");
-            } 
+            }
             else if (command.startsWith('aggiungi ') || command.startsWith('add ')) {
                 const parts = command.split(' ');
                 if (parts.length >= 4) {
@@ -2768,21 +3477,21 @@ def home():
                     const content = parts.slice(2, -2).join(' ');
                     const x = parseInt(parts[parts.length-2]);
                     const y = parseInt(parts[parts.length-1]);
-                    
+                   
                     if (!currentCanvas) {
                         currentCanvas = {
                             id: 'canvas-' + Date.now(),
                             elements: []
                         };
                     }
-                    
+                   
                     currentCanvas.elements.push({
                         id: 'el-' + Date.now(),
                         type: type,
                         content: content,
                         position: { x: x, y: y }
                     });
-                    
+                   
                     renderMessage("assistant", `✅ Aggiunto elemento ${type} al canvas in (${x},${y})`);
                 } else {
                     renderMessage("assistant", "❌ Formato comando errato. Usa: @canvas aggiungi [tipo] [contenuto] [x] [y]");
@@ -2794,8 +3503,10 @@ def home():
         }
     </script>
 </body>
-</html> """
+</html>
+ """
     return Response(html, content_type="text/html; charset=utf-8")
+
 def chat_with_ces_plus(user_message, conversation_history, attachments=None):
     """
     Versione avanzata di CES con ragionamento passo-passo e messaggi separati.
@@ -2920,7 +3631,28 @@ def format_conversation_history(history):
                 formatted.append(f"{role}: {content}")
     
     return "\n".join(formatted) if formatted else "Nessuna cronologia rilevante"
-    
+
+@app.route("/api/relay-telegram", methods=["POST"])
+def relay_telegram():
+    # import requests  # <-- RIMUOVI QUESTA RIGA
+    data = request.get_json()
+    channel_link = data.get("channel_link")
+    telegraph_url = data.get("telegraph_url")
+    article_text = data.get("article_text")
+    match = re.match(r"https://t\.me/([a-zA-Z0-9_]+)", channel_link)
+    if not match:
+        return jsonify({"success": False, "error": "Link canale non valido"})
+    channel_username = match.group(1)
+    try:
+        from telegram import Bot
+        bot = Bot(token=TELEGRAM_TOKEN)
+        text = f"📝 Nuovo articolo pubblicato!\n{telegraph_url}\n\nEstratto:\n{article_text[:500]}"
+        bot.send_message(chat_id=f"@{channel_username}", text=text)
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Errore invio Telegram: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+
 def meteo_oggi(città):
     """Ottiene le informazioni meteo per una città specifica usando OpenWeatherMap"""
     API_KEY = OPENWEATHERMAP_API_KEY
@@ -3421,22 +4153,52 @@ Repository per Download Manager:
     else:
         return "Comando non riconosciuto. Prova '@app' per vedere i repository disponibili."
 
+from telegram import Bot
+from telegram.error import TelegramError
 
+
+@app.route('/invia-telegram', methods=['POST'])
+def invia_telegram():
+    data = request.get_json()
+    chat_id = data.get('chat_id')  # Es: "@Leoniaplusgiornale"
+    text = data.get('text')        # Cambiato da 'testo' a 'text'
+    link_telegraph = data.get('link_telegraph')
+
+    if not all([chat_id, text, link_telegraph]):
+        return jsonify({"success": False, "error": "Dati mancanti"}), 400
+
+    try:
+        bot = Bot(token=TELEGRAM_TOKEN)
+        bot.send_message(
+            chat_id=chat_id,
+            text=f"📢 Nuovo articolo!\n\n{text[:1000]}...\n\nLeggi tutto: {link_telegraph}",
+            parse_mode='HTML',
+            disable_web_page_preview=False
+        )
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"ERRORE TELEGRAM: {str(e)}")
+        return jsonify({"success": False, "error": str(e)})
+    
 from flask import session
 import requests
 import locale
 import json
-
+import re
+import datetime
+import base64
 def handle_quick_commands(message, experimental_mode=False, attachments=None, api_provider="gemini", conversation_history=None):
     """
     Gestisce i comandi rapidi di ArcadiaAI.
+    Nota: Questa funzione è ora asincrona (`async def`) a causa della chiamata a `await invia_a_telegram`.
     """
     msg_lower = message.strip().lower()
     command, argument = parse_quick_command(message)
     if command is None:
         return None
-    
+
     print(f"DEBUG: Comando ricevuto - command: {command}, argument: {argument}")  # Debug logging
+
 
     # Prima verifica i comandi speciali
     if msg_lower == "@impostazioni modalità sperimentale disattiva":
@@ -3449,20 +4211,20 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
     if command == "cerca":
         if not argument:
             return "❌ Devi specificare cosa cercare. Esempio: @cerca seconda guerra mondiale"
-        
+
         try:
             results = search_web(argument)
             if not results:
                 return f"❌ Nessun risultato trovato per '{argument}'"
-            
+
             response = f"🔍 Risultati per '{argument}':\n\n"
             for i, result in enumerate(results[:3], 1):
                 response += f"{i}. {result.get('title', 'Nessun titolo')}\n"
                 response += f"   {result.get('url', 'Nessun URL')}\n"
                 response += f"   {result.get('snippet', 'Nessuna descrizione')}\n\n"
-            
+
             return response.strip()
-            
+
         except Exception as e:
             print(f"Errore durante la ricerca: {str(e)}")
             return "❌ Errore temporaneo durante la ricerca. Riprova più tardi."
@@ -3470,22 +4232,34 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
     elif command == "telegraph":
         if not argument:
             return "❌ Devi specificare il contenuto da pubblicare. Esempio: @telegraph Questo è un articolo di prova"
-        
-        try:
+
+        # Se l'argomento inizia con "scrivi" o "scrivimi", genera contenuto con AI
+        if argument.lower().startswith(("scrivi", "scrivimi")):
+            try:
+                # Genera il contenuto con Gemini
+                generated_content = chat_with_gemini(argument, conversation_history or [])
+                if not generated_content:
+                    return "❌ Impossibile generare il contenuto"
+
+                # Pubblica su Telegraph
+                title = "Articolo generato da ArcadiaAI"
+                telegraph_url = publish_to_telegraph(title, generated_content)
+
+                if telegraph_url and not telegraph_url.startswith("⚠️"):
+                    return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
+                return telegraph_url or "❌ Errore nella pubblicazione"
+
+            except Exception as e:
+                print(f"Errore generazione/pubblicazione: {str(e)}")
+                return "❌ Errore durante la generazione/pubblicazione"
+        else:
             title = "Articolo generato da ArcadiaAI"
             telegraph_url = publish_to_telegraph(title, argument)
-            
-            if telegraph_url and not telegraph_url.startswith("⚠️"):
-                return f"📝 Articolo pubblicato su Telegraph: {telegraph_url}"
-            return telegraph_url or "❌ Errore nella pubblicazione"
-            
-        except Exception as e:
-            print(f"Errore durante la pubblicazione su Telegraph: {str(e)}")
-            return "❌ Errore temporaneo durante la pubblicazione. Riprova più tardi."
+            return f"📝 Pubblicato su Telegraph: {telegraph_url}" if telegraph_url else "❌ Errore pubblicazione"
 
     elif command == "meteo" and argument:
         return meteo_oggi(argument)
-    
+
     elif command == "data":
         locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
         oggi = datetime.datetime.now().strftime("%A %d %B %Y")
@@ -3497,10 +4271,10 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
     elif command == "arcadia":
         return "🔗 Profilo della Repubblica di Arcadia: https://t.me/Repubblica_Arcadia"
 
-    elif command == "@impostazioni lingua italiano":
+    elif msg_lower == "@impostazioni lingua italiano":
         return "🇮🇹 Lingua cambiata in italiano!"
 
-    elif command == "@impostazioni lingua inglese":
+    elif msg_lower == "@impostazioni lingua inglese":
         return "🇬🇧 Lingua cambiata in inglese!"
 
     elif command == "app":
@@ -3518,7 +4292,7 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
     elif command == "flathub":
         if not argument:
             return "❌ Specifica un'app da cercare su Flathub. Esempio: @flathub firefox"
-        return handle_flathub_command("flathub",argument)
+        return handle_flathub_command("flathub", argument)
     elif command == "snap":
         if not argument:
             return "❌ Specifica un'app Snap da cercare. Esempio: @snap firefox"
@@ -3544,12 +4318,12 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
             "Modello esterni: DeepSeek Chat\n"
             "Lingua: Italiano e inglese (beta)\n"
             "Creatore: Mirko Yuri Donato\n"
-            "Licenza: GNU GPL v3.0+\n"
+            "Licenza: Mozilla Public License 2.0\n"
             "Repository: https://github.com/Mirko-linux/Nova-App/tree/main/ArcadiaAI\n"
             "Termini di Servizio: https://arcadiaai.netlify.app/documentazioni"
         )
 
-    elif command == "crea" and argument.lower().startswith("zip"):
+    elif command == "crea" and argument and argument.lower().startswith("zip"):
         return "Per creare uno ZIP allega i file e usa il comando dalla chat. Il file ZIP verrà generato dal frontend."
 
     elif command == "impostazioni":
@@ -3589,6 +4363,78 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
         except Exception as e:
             return f"❌ Errore nella generazione dell'immagine: {e}"
 
+    elif command == "musica":
+        if not argument:
+            return "❌ Specifica che tipo di musica generare. Esempio: @musica synthwave futuristica"
+
+        # LISTA DEGLI ENDPOINT PUBBLICI E GRATUITI
+        endpoints = [
+            "https://suno-api-2025.free.hf.space/api/generate", # Spesso offline o sovraccarico
+            "https://arcadiaai.onrender.com/api/generate-musica", # Il tuo endpoint personale
+            "https://musicgen-proxy-2025.fly.dev/generate" # Probabilmente non più attivo
+        ]
+
+        for endpoint in endpoints:
+            print(f"DEBUG: Tento di usare l'endpoint -> {endpoint}")
+            try:
+                response = requests.post(
+                    endpoint,
+                    headers={"Content-Type": "application/json"},
+                    json={"prompt": argument},
+                    timeout=30 # Timeout leggermente più lungo per i servizi lenti
+                )
+
+                if response.status_code == 200:
+                    print(f"DEBUG: Risposta 200 OK da {endpoint}")
+                    try:
+                        data = response.json()
+                        music_url = data.get("music_url") or data.get("url") or data.get("audio_url")
+
+                        if music_url and isinstance(music_url, str) and music_url.startswith('http'):
+                            print(f"DEBUG: Successo! URL trovato: {music_url}")
+
+                            # --- NUOVA LOGICA PER IL TIPO DI AUDIO ---
+                            audio_type = "audio/mpeg" # Default per MP3
+                            if music_url.lower().endswith('.wav'):
+                                audio_type = "audio/wav"
+                            elif music_url.lower().endswith('.ogg'):
+                                audio_type = "audio/ogg"
+                            # Puoi aggiungere altri tipi se necessario (es. .aac, .flac)
+
+                            return (
+                                f'<div style="text-align: center; margin: 15px 0;">'
+                                f'<audio controls style="width: 100%; max-width: 400px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">'
+                                f'<source src="{music_url}" type="{audio_type}">' # Usa il tipo di audio dinamico
+                                f'Il tuo browser non supporta l\'elemento audio.'
+                                f'</audio><br>'
+                                f'<small style="color: #666; font-size: 0.8em;">Generato tramite endpoint pubblico</small>'
+                                f'</div>'
+                            )
+                        else:
+                            print(f"DEBUG: Risposta OK ma URL non valido. Provo il prossimo.")
+                            continue # Prova il prossimo servizio
+                    except ValueError:
+                        print(f"DEBUG: Risposta non è un JSON valido. Provo il prossimo.")
+                        continue # Prova il prossimo servizio
+                else:
+                    print(f"DEBUG: Errore da {endpoint} (Status: {response.status_code}). Provo il prossimo.")
+                    continue # Prova il prossimo servizio
+
+            except requests.exceptions.RequestException as e:
+                print(f"DEBUG: Endpoint {endpoint} non raggiungibile ({e}). Provo il prossimo.")
+                continue # Prova il prossimo servizio
+
+        # --- FALLBACK ---
+        print("DEBUG: Nessun endpoint ha funzionato. Attivo il fallback manuale.")
+        return (
+            '⚠️ <b>Nessun servizio di generazione automatica è al momento disponibile.</b><br><br>'
+            'Puoi comunque creare la tua musica manualmente tramite il link qui sotto:'
+            '<div style="text-align: center; margin-top: 15px;">'
+            f'<a href="https://huggingface.co/spaces/facebook/MusicGen" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 8px; font-weight: 500;">'
+            '🎧 Genera Musica su MusicGen'
+            '</a>'
+            '</div>'
+        )
     elif command == "privacy":
         return (
             "🔒 Privacy Policy:\n\n"
@@ -3603,34 +4449,82 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
             "I SAC sono componenti interne del codice sorgente di ArcadiaAI"
         )
 
-    elif command == "riassumi":
-        if attachments:
-          for attachment in attachments:
-            if attachment.get('type') == 'application/pdf':
-                file_data = base64.b64decode(
-                    attachment['data'].split(',')[1] if attachment['data'].startswith('data:') else attachment['data']
-                )
-                testo = extract_text_from_file(file_data, 'application/pdf')
-                if not testo:
-                    return "❌ Impossibile estrarre testo dal PDF."
-                prompt = f"Riassumi il seguente testo:\n\n{testo[:12000]}"
-                if api_provider == "gemini" and gemini_model:
-                    return chat_with_gemini(prompt, conversation_history)
-                elif api_provider == "cesplus" and gemini_model:
-                    return chat_with_ces_plus(prompt, conversation_history)
-                elif api_provider == "deepseek":
-                    return chat_with_deepseek(prompt, conversation_history)
+    elif command == "telegram":
+        # Estrai il link del canale e il prompt
+        parts = argument.split("prompt", 1)
+        if len(parts) < 2:
+            return "❌ Formato errato. Usa: @telegram [link_canale] prompt \"testo\""
+
+        channel_link = parts[0].strip()
+        prompt_text = parts[1].strip().strip('"')
+
+        # Verifica il formato del link
+        if not re.match(r"https://t\.me/[a-zA-Z0-9_]+", channel_link):
+            return "❌ Link canale non valido. Esempio: https://t.me/nomecanale"
+
+        # Genera articolo con Gemini
+        try:
+            article, telegraph_url = generate_with_gemini(prompt_text, "Articolo da ArcadiaAI")
+            if not telegraph_url or telegraph_url.startswith("⚠️"):
+                return f"❌ Errore nella pubblicazione su Telegraph: {telegraph_url}"
+
+            # Estrai l'username del canale dal link
+            channel_username = channel_link.split('/')[-1]
+
+            # Invia al canale Telegram
+            response = requests.post(
+                "https://arcadiaai.onrender.com/invia-telegram",  # Assicurati che questo sia il tuo URL corretto
+                json={
+                    "chat_id": f"@{channel_username}",
+                    "text": f"<b>📢 Nuovo articolo pubblicato!</b>\n\n{article[:500]}...",  # Cambiato da 'testo' a 'text'
+                    "link_telegraph": telegraph_url
+                },
+                timeout=20
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    return f"✅ Articolo pubblicato e inviato correttamente!\n{telegraph_url}"
                 else:
-                    return "❌ Provider non riconosciuto."
-        return "❌ Nessun PDF trovato tra gli allegati."
-    if not argument or not argument.startswith("http"):
-        return "❌ Allega un file PDF o fornisci un URL diretto al PDF da riassumere."
+                    return f"⚠️ Articolo pubblicato su Telegraph ma errore invio Telegram: {result.get('error', 'Errore sconosciuto')}\n{telegraph_url}"
+            else:
+                return f"⚠️ Errore nella richiesta al server: {response.status_code}"
+
+        except Exception as e:
+            return f"❌ Errore durante l'operazione: {str(e)}"
+
+    elif command == "riassumi":
+        # Assumi che extract_text_from_file, chat_with_gemini, chat_with_ces_plus,
+        # e chat_with_deepseek siano definiti altrove
+        # E gemini_model sia accessibile in questo scope se api_provider è "gemini" o "cesplus"
+        if attachments:
+            for attachment in attachments:
+                if attachment.get('type') == 'application/pdf':
+                    file_data = base64.b64decode(
+                        attachment['data'].split(',')[1] if attachment['data'].startswith('data:') else attachment['data']
+                    )
+                    testo = extract_text_from_file(file_data, 'application/pdf')
+                    if not testo:
+                        return "❌ Impossibile estrarre testo dal PDF."
+                    prompt = f"Riassumi il seguente testo:\n\n{testo[:12000]}"
+                    if api_provider == "gemini" and 'gemini_model' in locals():
+                        return chat_with_gemini(prompt, conversation_history)
+                    elif api_provider == "cesplus" and 'gemini_model' in locals():
+                        return chat_with_ces_plus(prompt, conversation_history)
+                    elif api_provider == "deepseek":
+                        return chat_with_deepseek(prompt, conversation_history)
+                    else:
+                        return "❌ Provider non riconosciuto o modello non disponibile."
+            return "❌ Nessun PDF trovato tra gli allegati."
+        if not argument or not argument.startswith("http"):
+            return "❌ Allega un file PDF o fornisci un URL diretto al PDF da riassumere."
 
     elif command == "aiuto":
         return (
             "🎯 Comandi rapidi disponibili:\n\n"
             "@cerca [query] - Cerca su internet\n"
-            "@telegraph [testo] - Pubblica su Telegraph\n"
+            "@telegraph [testo|url] - Pubblica testo o il contenuto di un URL su Telegraph\n"
             "@meteo [luogo] - Ottieni il meteo\n"
             "@data - Mostra la data di oggi\n"
             "@aiuto - Mostra questa guida\n"
@@ -3642,7 +4536,7 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
             "@ToS - Mostra i Termini di Servizio\n"
             "@Arcadia - Mostra il profilo della Repubblica di Arcadia\n"
             "@info - Mostra informazioni su ArcadiaAI\n"
-            "@impostazioni modalità sperimentale attiva - Attiva la modalità sperimentale"
+            "@impostazioni modalità sperimentale attiva - Attiva la modalità sperimentale\n"
             "@codice_sorgente - Mostra il codice sorgente di ArcadiaAI\n"
             "@impostazioni - Mostra il menu delle impostazioni\n"
             "@estensioni - Mostra le estensioni installate\n"
@@ -3656,15 +4550,16 @@ def handle_quick_commands(message, experimental_mode=False, attachments=None, ap
             "@crea zip - genera un file ZIP con file dati dall'utente\n"
             "@esporta - Esporta l'ultima conversazione in un file TXT\n"
             "@importa - Importa la una conversazione da un file TXT tramite NovaSync\n"
-            "@riassumi [URL PDF] - Legge e riassume un file PDF\n"
+            "@riassumi https://www.ilovepdf.com/ - Legge e riassume un file PDF\n"
             "Per altre domande, chiedi pure!"
         )
 
     # Se nessun comando è riconosciuto
     return f"❌ Comando '{command}' non riconosciuto. Scrivi '@aiuto' per la lista dei comandi."
-    
+
 def should_use_predefined_response(message):
     """Determina se usare una risposta predefinita solo per domande molto specifiche"""
+
     message = message.lower().strip()
     exact_matches = [
         "chi sei esattamente",
