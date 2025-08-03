@@ -1,10 +1,10 @@
-# Nova Surf
+# Nova Surf Classic
 
 ![Logo di Nova Surf](photo_2025-04-09_11-31-55.png)
 
 
-**Nova Surf** è un browser open source basato su **Chromium**, progettato per offrire un’esperienza fluida, libera e personalizzabile.  
-Scritto interamente in **Python**, utilizza la libreria grafica **PyQtWebEngine 5** per integrare un motore moderno e potente in un'interfaccia elegante.
+**Nova Surf Classic** è un browser open source basato su **Chromium**, progettato per offrire un’esperienza fluida, libera e personalizzabile.  
+Scritto interamente in **Python**, utilizza la libreria grafica **PyQtWebEngine 5** per integrare un motore moderno e potente in un'interfaccia elegante. 
 
 ---
 
