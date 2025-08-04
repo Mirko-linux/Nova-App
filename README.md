@@ -1,7 +1,6 @@
 # Nova-App 
 <!-- Nova-App -->
 <p align="center">
-  <img src="logo/nova_surf_logo.ico" alt="Logo Nova Surf" width="200"/>
   <img src="logo/logo_arcadia_ai.jpg" alt="Logo ArcadiaAI" width="200"/>
   <img src="logo/photo_2025-07-13_09-03-03.jpg" alt="Logo ArcadiaAI" width="200"/>
 </p>
@@ -17,18 +16,12 @@ L'intero progetto è mantenuto è sviluppato in Italia da Mirko Yuri Donato, com
 
 
 ## Le nostre App:
-- **Nova Surf**: browser web scritto in PyQt5
 - **Nova QuickNote**: editor di testo completo
 - **ArcadiaAI**: chatbot AI basato su vari LLM
 - **Nova Calc**: calcolatrice avanzata
 - **Nova Pocket**: Progetto ancora in fase di sviluppo 
 - **Mini Tool**: componenti leggeri per progetti in python
-
-## Nova Surf
-Nova Surf è un browser molto leggero scritto in Python, mediante l'uso delle librerie PyQt e PyQtWebEngine.
-Esso nasce dall'idea di unire il design e la comodità di *Mozilla Firefox* alla compatibilità e la versatilità di *Google Chrome*.
-Il browser ha già alcune estensioni in via di rilascio, tra cui il *Firefox Relay*, *Servizi Leonia+* e un *Ad-Block*. Nova Surf è ancora in fase di sviluppo, quindi il codice sorgente potrebbe essere divrso da quello reso pubblico.
-
+  
 ## ArcadiaAI
 
 ArcadiaAI è un chatbot basato su Intelligenza Artificiale generativa libero e open source. Lo scopo dell'IA è quello di rendere accessibile questo mondo a tutti gli utenti, indistintamente dal denaro.
@@ -51,3 +44,4 @@ Il programma è un fork di *GNU Gedit* ed è sotto la Licenza GNU GPL v3.0+
 
 Nova Pocket è un servizo di cloud storage open source e decentralizzato basato sulla rete peer-to-peer progettato per essere illimitato.
 A differenza dei normali servizi - come Google Drive o Dropbox - in Nova Pocket il file vieene frammentato in pochissimi megabyte e diviso tra gli altri utenti 
+
