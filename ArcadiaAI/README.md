@@ -31,14 +31,14 @@ Qui, ogni modulo è pensato per essere:
 
 
 ---
-
 ## 🧩 Modelli principali
 
 | Modulo          | Descrizione                                           |
 | :-------------- | :---------------------------------------------------- |
-| **CES 1.5** | Modello predefinito di ArcadiaAI, basato su Google Gemini |
+| **CES 1.5**     | Modello predefinito di ArcadiaAI, basato su Google Gemini |
 | **DeepSeek R1** | Modello linguistico open source gestito tramite Openrouter |
-| **CES Plus** | Variante di CES 360 e 1.5 progettata per i ragionamenti |
+| **CES Plus**    | Variante di CES 360 e 1.5 progettata per i ragionamenti |
+| **Qwen3**       | Modello avanzato sviluppato da Alibaba, ottimizzato per dialoghi multilingua e generazione creativa |
 ---
 
 ## 🚀 Inizia Subito
