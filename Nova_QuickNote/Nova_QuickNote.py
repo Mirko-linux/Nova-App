@@ -18,6 +18,7 @@ from gettext import gettext as _
 
 gi.require_version("Gtk", "3.0")
 gi.require_version('Gdk', '3.0')
+gi.require_version('WebKit2', '4.1')
 from gi.repository import Gdk, Gtk, Pango, GLib, GObject
 
 # Configurazione traduzioni
@@ -430,12 +431,16 @@ class NovaQuickNote(Gtk.Window):
         self.save_btn = Gtk.Button.new_with_label(_("Salva"))
         self.arcadiaai_btn = Gtk.Button.new_with_label(_("ArcadiaAI"))
         self.write_btn = Gtk.Button.new_with_label(_("Write"))
+        self.editor_btn = Gtk.Button.new_with_label(_("Editor"))
+        self.calc_btn = Gtk.Button.new_with_label(_("Calcolatrice"))
         
         sidebar.pack_start(self.new_btn, False, False, 0)
         sidebar.pack_start(self.open_btn, False, False, 0)
         sidebar.pack_start(self.save_btn, False, False, 0)
         sidebar.pack_start(self.arcadiaai_btn, False, False, 0)
         sidebar.pack_start(self.write_btn, False, False, 0)
+        sidebar.pack_start(self.editor_btn, False, False, 0)
+        sidebar.pack_start(self.calc_btn,False, False, 0)
         
         return sidebar
 
@@ -454,6 +459,8 @@ class NovaQuickNote(Gtk.Window):
         else:
             self.main_panel.pack1(scroll, True, True)
 
+    
+
     def _setup_actions(self):
         """Configura le azioni principali"""
         self.new_btn.connect("clicked", self.new_document)
@@ -461,7 +468,45 @@ class NovaQuickNote(Gtk.Window):
         self.save_btn.connect("clicked", self.save_file)
         self.arcadiaai_btn.connect("clicked", self.open_arcadiaai_window)
         self.write_btn.connect("clicked", self.show_text_tools)
+        self.editor_btn.connect("clicked", self.show_editor_tools)  # Connetti il nuovo pulsante
+        self.calc_btn.connect("clicked", self.open_calculator)
 
+    def open_calculator(self, button):
+         if self.text_tools_box is None:
+            self.text_tools_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+            self.text_tools_box.set_size_request(300, -1)
+
+            title = Gtk.Label(label=_("Nova Calc"))
+            title.set_xalign(0)
+            self.text_tools_box.pack_start(title, False, False, 5)
+
+            self.webview = WebKit2.WebView()
+            self.webview.set_size_request(280, 400)
+
+            # Abilita JavaScript
+            settings = WebKit2.Settings()
+            settings.set_enable_javascript(True)
+            self.webview.set_settings(settings)
+
+        # Carica Nova Calc come HTML inline
+            calc_html = self._get_nova_calc_html()
+            self.webview.load_html(calc_html)
+
+            scroll = Gtk.ScrolledWindow()
+            scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            scroll.add(self.webview)
+            self.text_tools_box.pack_start(scroll, True, True, 0)
+
+        # Pulsante "Indietro"
+            back_btn = Gtk.Button.new_with_label(_("← Indietro"))
+            back_btn.connect("clicked", self.hide_tools)
+            self.text_tools_box.pack_start(back_btn, False, False, 0)
+
+            self.sidebar.pack_start(self.text_tools_box, False, False, 0)
+
+            self.text_tools_box.show_all()
+            for btn in [self.new_btn, self.open_btn, self.save_btn, self.arcadiaai_btn, self.write_btn, self.editor_btn, self.calc_btn]:
+             btn.hide()
     def _apply_settings(self):
         """Applica tutte le impostazioni"""
         # Mostra/nascondi barre
@@ -482,6 +527,31 @@ class NovaQuickNote(Gtk.Window):
             settings.set_property("gtk-application-prefer-dark-theme", False)
         else:  # system
             pass
+    def show_editor_tools(self, button):
+        """Mostra gli strumenti di programmazione nella sidebar"""
+        if self.text_tools_box is None:
+           self.text_tools_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+
+        # Pulsanti per programmazione
+        run_btn = Gtk.Button.new_with_label(_("Esegui codice"))
+        comment_btn = Gtk.Button.new_with_label(_("Commenta/Decommenta"))
+        indent_btn = Gtk.Button.new_with_label(_("Indenta"))
+        back_btn = Gtk.Button.new_with_label(_("Indietro"))
+
+        for btn in [run_btn, comment_btn, indent_btn, back_btn]:
+            self.text_tools_box.pack_start(btn, False, False, 0)
+
+        self.sidebar.pack_start(self.text_tools_box, False, False, 0)
+
+        # Collega le azioni
+        run_btn.connect("clicked", self.run_code)
+        comment_btn.connect("clicked", self.toggle_comment)
+        indent_btn.connect("clicked", self.indent_code)
+        back_btn.connect("clicked", self.hide_tools)
+
+        self.text_tools_box.show_all()
+        for btn in [self.new_btn, self.open_btn, self.save_btn, self.arcadiaai_btn, self.write_btn, self.editor_btn]:
+          btn.hide()
 
     def _show_preferences(self, widget):
         """Mostra la finestra delle preferenze"""
