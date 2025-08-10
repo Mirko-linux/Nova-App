@@ -6,7 +6,10 @@ CES Image è un SAC (_Strumento avanzato di CES_) che permette ad ArcadiaAI di i
 >
 
 ## Funzionamento di CES Image
-  <img src="docs/images/ces-image-flow.png" alt="Diagramma CES Flow" width="900"/>
+
+<img src="images/ces-image-flow.png" alt="Diagramma CES Flow" width="900"/>
+
+
 CES Image segue una pipeline rigorosa:
 
 1. **Parsing del JSON**
