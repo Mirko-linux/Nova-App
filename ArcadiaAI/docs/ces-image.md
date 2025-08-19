@@ -25,7 +25,7 @@ Rimozione degli spazi iniziali/finali e validazionealta qualità, realistico
         "nud0" → "nudo"
         "s3x" → "sex"
         "n u d i t à" → "nudita"
-   > "CES Image non garantisce che il filtri Image non garantisce al 100% l’assenza di contenuti indesiderati, ma riduce drasticamente il rischio grazie al filtro proattivo.
+   > "CES Image non garantisce al 100% l’assenza di contenuti indesiderati, ma riduce drasticamente il rischio grazie al filtro proattivo.
 
 3. **Miglioramento del prompt (Enhancement)**
    Il prompt originale viene arricchito per massimizzare la qualità visiva:
