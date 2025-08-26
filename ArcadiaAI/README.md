@@ -3,7 +3,7 @@
 </p>
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
-[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
+[![License](https://img.shields.io/badge/License-MPL%202.0-blue.svg)](https://opensource.org/licenses/MPL-2.0)
 ![Made in Italy 🇮🇹](https://img.shields.io/badge/Made%20in%20Italy-green.svg)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-@ArcadiaAI_chatbot-blue?logo=telegram)](https://t.me/ArcadiaAI_chatbot)
 ![Disponibile per Linux](https://img.shields.io/badge/Disponibile-Linux-2ea44f?logo=linux&logoColor=white)
@@ -36,9 +36,11 @@ Qui, ogni modulo è pensato per essere:
 | Modulo          | Descrizione                                           |
 | :-------------- | :---------------------------------------------------- |
 | **CES 1.5**     | Modello predefinito di ArcadiaAI, basato su Google Gemini |
-| **DeepSeek R1** | Modello linguistico open source gestito tramite Openrouter |
+| **DeepSeek V3** | Modello linguistico open source gestito tramite Openrouter |
 | **CES Plus**    | Variante di CES 360 e 1.5 progettata per i ragionamenti |
 | **Qwen3**       | Modello avanzato sviluppato da Alibaba, ottimizzato per dialoghi multilingua e generazione creativa |
+| **Gemma**       | Modello open source di grandi dimensioni  sviluppato da Google |
+| **Llama**       | Llama 3.8 8B |
 ---
 
 ## 🚀 Inizia Subito
@@ -70,7 +72,7 @@ Assicurati di avere installato:
 1.  **Clona il repository:**
 
     ```bash
-    git clone [https://github.com/Mirko-linux/Nova-App.git](https://github.com/Mirko-linux/Nova-App.git)
+    git clone https://github.com/Mirko-linux/Nova-App.git
     cd Nova-App/ArcadiaAI
     ```
 
@@ -90,7 +92,7 @@ Assicurati di avere installato:
 
 ---
 
-## 🍴 Fork e Contribuisci
+## Fork e Contribuisci
 
 Se sei uno sviluppatore e desideri contribuire al progetto ArcadiaAI, personalizzare i moduli o integrare nuove funzionalità, ti invitiamo a effettuare il **fork del repository**.
 
