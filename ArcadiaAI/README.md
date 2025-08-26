@@ -17,7 +17,7 @@ Creato da [Mirko Donato](https://github.com/Mirko-linux), ArcadiaAI unisce model
 
 ---
 
-## 🧠 Visione
+##  Visione
 
 > “L’intelligenza artificiale deve essere un bene accessibile a tutti, ArcadiaAI nasce dal desiderio di democratizzare l'Intelligenza Artificiale"
 
@@ -139,4 +139,15 @@ Ti consigliamo di creare un file `.env` nella directory principale del progetto 
 
 - [Termini di Servizio](docs/tos.md)
 - [Privacy Policy](docs/Policy.md)
-- [Domande Frequenti](docs/faq.md) 
+- [Domande Frequenti](docs/faq.md)
+
+---
+
+## Licenza
+
+Questo progetto è distribuito sotto la [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/).
+
+Alcuni moduli o componenti specifici sono soggetti a licenze proprietarie, come indicato nel file `PROPRIETARY.md`.  
+Questa distinzione garantisce trasparenza e rispetto delle condizioni d’uso per ogni parte del progetto.
+
+---
