@@ -3,7 +3,7 @@
 </p>
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/License-MPL%202.0-blue.svg)](https://opensource.org/licenses/MPL-2.0)
+[![Licenza: MPL-2.0](https://img.shields.io/badge/Licenza-MPL_2.0-blue.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 ![Made in Italy 🇮🇹](https://img.shields.io/badge/Made%20in%20Italy-green.svg)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-@ArcadiaAI_chatbot-blue?logo=telegram)](https://t.me/ArcadiaAI_chatbot)
 ![Disponibile per Linux](https://img.shields.io/badge/Disponibile-Linux-2ea44f?logo=linux&logoColor=white)
@@ -31,7 +31,7 @@ Qui, ogni modulo è pensato per essere:
 
 
 ---
-## 🧩 Modelli principali
+## Modelli principali
 
 | Modulo          | Descrizione                                           |
 | :-------------- | :---------------------------------------------------- |
@@ -43,11 +43,11 @@ Qui, ogni modulo è pensato per essere:
 | **Llama**       | Llama 3.8 8B |
 ---
 
-## 🚀 Inizia Subito
+## Inizia Subito
 
 Benvenuto in ArcadiaAI! Sei pronto a esplorare il futuro dell'intelligenza artificiale conversazionale? Iniziare è semplice e non richiede alcuna configurazione complessa.
 
-### 💻 Utilizza ArcadiaAI Direttamente dal Browser
+### Utilizza ArcadiaAI Direttamente dal Browser
 
 Per un'esperienza immediata, puoi accedere ad ArcadiaAI direttamente tramite il tuo browser. Non è necessario installare nulla:
 
