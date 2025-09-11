@@ -33,14 +33,19 @@ Qui, ogni modulo è pensato per essere:
 ---
 ## Modelli principali
 
-| Modulo          | Descrizione                                           |
-| :-------------- | :---------------------------------------------------- |
-| **CES 1.5**     | Modello predefinito di ArcadiaAI, basato su Google Gemini |
-| **DeepSeek V3** | Modello linguistico open source gestito tramite Openrouter |
-| **CES Plus**    | Variante di CES 360 e 1.5 progettata per i ragionamenti |
-| **Qwen3**       | Modello avanzato sviluppato da Alibaba, ottimizzato per dialoghi multilingua e generazione creativa |
-| **Gemma**       | Modello open source di grandi dimensioni  sviluppato da Google |
-| **Llama**       | Llama 3.8 8B |
+ArcadiaAI ha recentemente abbandonato l’uso diretto di API key pubbliche per modelli esterni, adottando una struttura **serverless e decentralizzata** tramite [Puter.js](https://puter.js.org).
+
+
+| Modello principale       | Fallback 1           | Fallback 2           | Descrizione sintetica                          |
+|--------------------------|----------------------|----------------------|------------------------------------------------|
+| **GPT 5**                | GPT 5 Mini           | GPT 5 Nano           | Modello predefinito, versatile e potente       |
+| **GPT 4o**               | GPT 4o Mini          | GPT 4.1 Nano         | Ottimizzato per dialoghi e ragionamento        |
+| **Gemini 2.5 Flash**     | 2.5 Flash Lite       | Gemini 2.0 Flash     | Rapido, creativo, multilingua                  |
+| **LLaMA 4 Maverick**     | LLaMA Scout          | LLaMA 3 8B           | Generazione e analisi, stile Meta              |
+| **GPT o3**               | GPT o4 Mini          | GPT o3 Mini                | Sperimentale, leggero e reattivo               |
+
+> ⚠️ *Nota:* I fallback vengono attivati automaticamente quando il modello principale raggiunge il limite di richieste o risorse. Questo garantisce **continuità**, **fluidità** e **zero interruzioni** nell’esperienza utente.
+
 ---
 
 ## Inizia Subito
@@ -55,7 +60,7 @@ Per un'esperienza immediata, puoi accedere ad ArcadiaAI direttamente tramite il 
 2.  **Scegli il tuo modello preferito:** Seleziona tra i nostri moduli disponibili, come **CES 1.5** per un'esperienza generale o **CES Plus** per interazioni più avanzate.
 3.  **Inizia a chattare!** Digita le tue domande o richieste e scopri la potenza di ArcadiaAI.
 
-### 🛠️ Esegui ArcadiaAI Localmente (per sviluppatori)
+### Esegui ArcadiaAI Localmente (per sviluppatori)
 
 Se sei uno sviluppatore e desideri contribuire o personalizzare ArcadiaAI, puoi clonare il repository ed eseguirlo localmente.
 
@@ -129,14 +134,6 @@ Per poter lavorare efficacemente sul codice, assicurati di avere familiarità co
     npm install
     ```
 
-### Gestione delle API Key
-
-**Attenzione:** Le API key per i modelli principali (come Google Gemini o quelli gestiti tramite Openrouter) **non sono incluse** nel repository per motivi di sicurezza e sostenibilità.
-
-**Dovrai ottenere e configurare le tue API key personali** dai rispettivi provider (es. Google AI Studio per Gemini, Openrouter per DeepSeek R1, ecc.).
-
-Ti consigliamo di creare un file `.env` nella directory principale del progetto per gestire le tue API key in modo sicuro. Ecco un esempio di come potrebbe apparire il tuo file `.env`:
-
 ## Documentazione legale
 
 - [Termini di Servizio](docs/tos.md)
@@ -148,8 +145,5 @@ Ti consigliamo di creare un file `.env` nella directory principale del progetto 
 ## Licenza
 
 Questo progetto è distribuito sotto la [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/).
-
-Alcuni moduli o componenti specifici sono soggetti a licenze proprietarie, come indicato nel file `PROPRIETARY.md`.  
-Questa distinzione garantisce trasparenza e rispetto delle condizioni d’uso per ogni parte del progetto.
 
 ---
