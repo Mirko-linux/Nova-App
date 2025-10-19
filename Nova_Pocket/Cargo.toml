@@ -2,7 +2,7 @@
 name = "nova-pocket"
 version = "0.1.0"
 edition = "2021"
-authors = Mirko Donato
+authors = "Mirko Donato"
 description = "Cloud storage decentralizzato open-source"
 license = "MPL-2.0"
 
@@ -46,4 +46,5 @@ web-sys = { version = "0.3", features = ["Window", "Document"] }
 opt-level = 3
 lto = true
 codegen-units = 1
+
 
