@@ -2,9 +2,9 @@
 name = "nova-pocket"
 version = "0.1.0"
 edition = "2021"
-authors = ["Il Tuo Nome <tuo@email.com>"]
+authors = Mirko Donato
 description = "Cloud storage decentralizzato open-source"
-license = "GPL-3.0-or-later"  # O "MPL-2.0" se preferisci
+license = "MPL-2.0"
 
 # Dependencies per il backend Rust
 [dependencies]
@@ -46,3 +46,4 @@ web-sys = { version = "0.3", features = ["Window", "Document"] }
 opt-level = 3
 lto = true
 codegen-units = 1
+
