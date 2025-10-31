@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Oracolo di Delphi</title>
+  <script src="https://js.puter.com/v2/"></script>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <style>
+    /* Stili CSS */
+    body {
+      font-family: 'Georgia', serif;
+      background: #fdf6e3;
+      color: #333;
+      padding: 2em;
+      max-width: 800px;
+      margin: auto;
+      min-height: 100vh; /* Garantisce che il body sia almeno alto come la finestra */
+      display: flex; /* Permette di allineare gli elementi */
+      flex-direction: column;
+    }
+    h1 {
+      text-align: center;
+      color: #6b4226;
+    }
+    label {
+      display: block;
+      margin-top: 1em; /* Aggiunto margine per separare */
+      margin-bottom: 0.5em;
+      font-weight: bold;
+    }
+    select, textarea {
+      width: 100%;
+      font-size: 1.1em;
+      padding: 0.5em;
+      margin-bottom: 1em;
+    }
+    button {
+      font-size: 1.1em;
+      padding: 0.5em 1em;
+      background: #6b4226;
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 1em;
+    }
+    pre {
+      background: #fffaf0;
+      padding: 1em;
+      white-space: pre-wrap;
+      border-left: 4px solid #6b4226;
+      margin-top: 1em;
+      flex-grow: 1; /* Permette a questo elemento di espandersi, spingendo il footer in basso */
+      overflow: auto;
+    }
+    
+    /* Nuovo stile per il footer e l'icona */
+    .footer-icon-container {
+        margin-top: 2em;
+        padding-top: 1em;
+        text-align: center;
+        border-top: 1px solid #e0e0e0;
+    }
+    .github-icon {
+        color: #6b4226;
+        transition: color 0.3s ease;
+    }
+    .github-icon:hover {
+        color: #a06e4e; /* Colore leggermente più chiaro al passaggio del mouse */
+    }
+  </style>
+</head>
+<body>
+  
+  <h1>🪶 Oracolo di Delphi</h1>
+  <p>Scrivi un tema e scegli le opzioni per generare i tuoi versi.</p>
+
+  <label for="modelSelect">Scegli il modello AI:</label>
+  <select id="modelSelect">
+    <option value="mistralai/mistral-7b-instruct-v0.1">Mistral 7B (Veloce)</option>
+    <option value="mistralai/mixtral-8x7b-instruct-v0.1">Mixtral 8x7B (Qualità Epica)</option>
+    <option value="meta-llama/llama-2-70b-chat">Llama 2 70B (Dettaglio)</option>
+  </select>
+
+  <label for="lengthSelect">Lunghezza del componimento:</label>
+  <select id="lengthSelect">
+    <option value="4-8 versi">Breve (4-8 versi)</option>
+    <option value="10-16 versi" selected>Media (10-16 versi)</option>
+    <option value="20-30 versi">Lunga (20-30 versi)</option>
+  </select>
+
+  <label for="languageSelect">Lingua:</label>
+  <select id="languageSelect">
+    <option value="italiana">Italiano</option>
+    <option value="inglese">Inglese</option>
+    <option value="latina">Latino (classico)</option>
+    <option value="spagnola">Spagnolo</option>
+  </select>
+  
+  <label for="prompt">Tema:</label>
+  <textarea id="prompt" rows="4" placeholder="Es. Il giuramento di Annibale nel tempio di Baal..."></textarea>
+  <br>
+  <button onclick="generaPoesia()">Genera poesia</button>
+  <pre id="output">🧠 Sto caricando il modello...</pre>
+
+  <div class="footer-icon-container">
+    <a href="https://github.com/Mirko-linux/Nova-App/new/main/ArcadiaAI/sr" target="_blank" title="Repository GitHub del Progetto">
+      <i class="fab fa-github fa-2x github-icon"></i>
+    </a>
+  </div>
+
+  <script>
+    async function setup() {
+      // Questi elementi ora esistono quando il codice viene eseguito
+      document.getElementById('output').textContent = '🧠 Caricamento del modello poetico...';
+      document.getElementById('output').textContent = '✨ Pronto. Personalizza le opzioni, inserisci un tema e genera poesia.';
+    }
+
+    window.generaPoesia = async function () {
+      const temaUtente = document.getElementById('prompt').value.trim();
+      const modelloScelto = document.getElementById('modelSelect').value;
+      const lunghezzaScelta = document.getElementById('lengthSelect').value;
+      const linguaScelta = document.getElementById('languageSelect').value;
+
+      if (!temaUtente) {
+        document.getElementById('output').textContent = '⚠️ Inserisci un tema.';
+        return;
+      }
+      
+      // Costruzione del prompt dinamico
+      const promptFinale = 
+        `Componi un testo poetico (poesia o poema epico) in lingua ${linguaScelta} sul tema: "${temaUtente}".
+         La lunghezza del componimento deve essere di circa ${lunghezzaScelta}.
+         Mantieni un tono solenne, formale e poetico, utilizzando rime o figure retoriche.`;
+
+      document.getElementById('output').textContent = 
+        `📝 Componendo versi (${lunghezzaScelta}) in ${linguaScelta} su "${temaUtente}" con ${modelloScelto.split('/').pop()}...`;
+      
+      const response = await puter.ai.chat(promptFinale, {
+        model: modelloScelto
+      });
+      
+      document.getElementById('output').textContent = response.message.content;
+    };
+
+    setup();
+  </script>
+</body>
+</html>
