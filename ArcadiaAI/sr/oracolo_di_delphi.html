@@ -16,8 +16,8 @@
       padding: 2em;
       max-width: 800px;
       margin: auto;
-      min-height: 100vh; /* Garantisce che il body sia almeno alto come la finestra */
-      display: flex; /* Permette di allineare gli elementi */
+      min-height: 100vh;
+      display: flex;
       flex-direction: column;
     }
     h1 {
@@ -26,7 +26,7 @@
     }
     label {
       display: block;
-      margin-top: 1em; /* Aggiunto margine per separare */
+      margin-top: 1em;
       margin-bottom: 0.5em;
       font-weight: bold;
     }
@@ -45,17 +45,35 @@
       cursor: pointer;
       margin-top: 1em;
     }
+    
+    /* Gruppo di pulsanti per Copia/Condividi */
+    #shareButtons {
+        display: flex;
+        justify-content: flex-start;
+        gap: 10px;
+        margin-top: 10px;
+        min-height: 40px;
+    }
+    .action-button {
+        background: #a06e4e;
+        padding: 0.5em 1em;
+        font-size: 0.9em;
+        transition: background 0.3s;
+    }
+    .action-button:hover {
+        background: #6b4226;
+    }
+
     pre {
       background: #fffaf0;
       padding: 1em;
       white-space: pre-wrap;
       border-left: 4px solid #6b4226;
       margin-top: 1em;
-      flex-grow: 1; /* Permette a questo elemento di espandersi, spingendo il footer in basso */
+      flex-grow: 1;
       overflow: auto;
     }
     
-    /* Nuovo stile per il footer e l'icona */
     .footer-icon-container {
         margin-top: 2em;
         padding-top: 1em;
@@ -67,7 +85,7 @@
         transition: color 0.3s ease;
     }
     .github-icon:hover {
-        color: #a06e4e; /* Colore leggermente più chiaro al passaggio del mouse */
+        color: #a06e4e;
     }
   </style>
 </head>
@@ -78,9 +96,10 @@
 
   <label for="modelSelect">Scegli il modello AI:</label>
   <select id="modelSelect">
-    <option value="mistralai/mistral-7b-instruct-v0.1">Mistral 7B (Veloce)</option>
-    <option value="mistralai/mixtral-8x7b-instruct-v0.1">Mixtral 8x7B (Qualità Epica)</option>
-    <option value="meta-llama/llama-2-70b-chat">Llama 2 70B (Dettaglio)</option>
+    <option value="gpt-5">GPT-5</option>
+    <option value="gpt-5-mini">GPT-5</option>
+    <option value="mistralai/mixtral-8x7b-instruct-v0.1">Mixtral 8x7B</option>
+    <option value="mistralai/mistral-7b-instruct-v0.1">Mistral 7B</option>
   </select>
 
   <label for="lengthSelect">Lunghezza del componimento:</label>
@@ -102,19 +121,60 @@
   <textarea id="prompt" rows="4" placeholder="Es. Il giuramento di Annibale nel tempio di Baal..."></textarea>
   <br>
   <button onclick="generaPoesia()">Genera poesia</button>
+  
   <pre id="output">🧠 Sto caricando il modello...</pre>
 
+  <div id="shareButtons">
+      <button id="copyButton" class="action-button" onclick="copyPoetry()" style="display: none;"><i class="fas fa-copy"></i> Copia Testo</button>
+      <button id="shareButton" class="action-button" onclick="sharePoetry()" style="display: none;"><i class="fas fa-share-alt"></i> Condividi</button>
+  </div>
+  
   <div class="footer-icon-container">
-    <a href="https://github.com/Mirko-linux/Nova-App/new/main/ArcadiaAI/sr" target="_blank" title="Repository GitHub del Progetto">
+    <a href="https://github.com/Mirko-linux/Nova-App/blob/main/ArcadiaAI/sr/oracolo_di_delphi.html" target="_blank" title="Repository GitHub del Progetto">
       <i class="fab fa-github fa-2x github-icon"></i>
     </a>
   </div>
 
   <script>
     async function setup() {
-      // Questi elementi ora esistono quando il codice viene eseguito
       document.getElementById('output').textContent = '🧠 Caricamento del modello poetico...';
       document.getElementById('output').textContent = '✨ Pronto. Personalizza le opzioni, inserisci un tema e genera poesia.';
+    }
+
+    async function copyPoetry() {
+        const textToCopy = document.getElementById('output').textContent;
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            alert('Testo copiato con successo negli appunti!');
+        } catch (err) {
+            console.error('Errore nella copia del testo:', err);
+            alert('Impossibile copiare il testo. Controlla la console per i dettagli.');
+        }
+    }
+
+    async function sharePoetry() {
+        const textToShare = document.getElementById('output').textContent + "\n\n— Generato dall'Oracolo di Delphi.";
+        
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'La mia Poesia Epica',
+                    text: textToShare,
+                    url: window.location.href
+                });
+            } catch (error) {
+                console.error('Errore durante la condivisione:', error);
+            }
+        } else {
+            alert('La funzione di condivisione non è supportata dal tuo browser. Usa il pulsante "Copia Testo".');
+        }
+    }
+
+    function showShareButtons(show) {
+        document.getElementById('copyButton').style.display = show ? 'inline-block' : 'none'; // Usiamo inline-block per i pulsanti affiancati
+        if (navigator.share) {
+             document.getElementById('shareButton').style.display = show ? 'inline-block' : 'none';
+        }
     }
 
     window.generaPoesia = async function () {
@@ -125,9 +185,12 @@
 
       if (!temaUtente) {
         document.getElementById('output').textContent = '⚠️ Inserisci un tema.';
+        showShareButtons(false);
         return;
       }
       
+      showShareButtons(false); // Nascondi i pulsanti durante la generazione
+
       // Costruzione del prompt dinamico
       const promptFinale = 
         `Componi un testo poetico (poesia o poema epico) in lingua ${linguaScelta} sul tema: "${temaUtente}".
@@ -142,6 +205,7 @@
       });
       
       document.getElementById('output').textContent = response.message.content;
+      showShareButtons(true); // Mostra i pulsanti dopo la generazione
     };
 
     setup();
