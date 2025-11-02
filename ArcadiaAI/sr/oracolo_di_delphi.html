@@ -4,89 +4,176 @@
   <meta charset="UTF-8">
   <title>Oracolo di Delphi</title>
   <script src="https://js.puter.com/v2/"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   
   <style>
-    /* Stili CSS */
-    body {
-      font-family: 'Georgia', serif;
-      background: #fdf6e3;
-      color: #333;
-      padding: 2em;
-      max-width: 800px;
-      margin: auto;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    h1 {
-      text-align: center;
-      color: #6b4226;
-    }
-    label {
-      display: block;
-      margin-top: 1em;
-      margin-bottom: 0.5em;
-      font-weight: bold;
-    }
-    select, textarea {
-      width: 100%;
-      font-size: 1.1em;
-      padding: 0.5em;
-      margin-bottom: 1em;
-    }
-    button {
-      font-size: 1.1em;
-      padding: 0.5em 1em;
-      background: #6b4226;
-      color: white;
-      border: none;
-      cursor: pointer;
-      margin-top: 1em;
-    }
-    
-    /* Gruppo di pulsanti per Copia/Condividi */
-    #shareButtons {
-        display: flex;
-        justify-content: flex-start;
-        gap: 10px;
-        margin-top: 10px;
-        min-height: 40px;
-    }
-    .action-button {
-        background: #a06e4e;
-        padding: 0.5em 1em;
-        font-size: 0.9em;
-        transition: background 0.3s;
-    }
-    .action-button:hover {
-        background: #6b4226;
-    }
+/* Stili CSS */
+body {
+    font-family: 'Georgia', serif;
+    background: #fdf6e3; /* Sfondo crema/beige chiaro */
+    color: #333;
+    padding: 2em;
+    max-width: 800px; /* Larghezza massima su desktop */
+    margin: auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box; /* Assicura che padding e border siano inclusi nella larghezza/altezza */
+}
+h1 {
+    text-align: center;
+    color: #6b4226; /* Marrone scuro */
+    margin-bottom: 0.5em;
+}
+.subtitle {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1.5em;
+    font-style: italic;
+    color: #a06e4e; /* Marrone medio */
+}
+label {
+    display: block;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    font-weight: bold;
+}
+select, textarea {
+    width: 100%;
+    font-size: 1.1em;
+    padding: 0.5em;
+    margin-bottom: 1em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+textarea {
+    resize: vertical; /* Permette solo il ridimensionamento verticale */
+}
+button {
+    font-size: 1.1em;
+    padding: 0.7em 1.5em;
+    background: #6b4226;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 1em;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+}
+button:hover {
+    background: #8b5a36;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.2);
+}
 
-    pre {
-      background: #fffaf0;
-      padding: 1em;
-      white-space: pre-wrap;
-      border-left: 4px solid #6b4226;
-      margin-top: 1em;
-      flex-grow: 1;
-      overflow: auto;
+/* Gruppo di pulsanti per Copia/Condividi */
+#shareButtons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 15px;
+    min-height: 40px;
+    flex-wrap: wrap; /* Permette l'andare a capo su schermi molto stretti */
+}
+.action-button {
+    background: #a06e4e;
+    padding: 0.6em 1.2em;
+    font-size: 0.95em;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: white; /* Per coerenza con gli altri pulsanti */
+}
+.action-button:hover {
+    background: #6b4226;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+.action-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.2);
+}
+pre {
+    background: #fffaf0;
+    padding: 1em;
+    white-space: pre-wrap;
+    border-left: 4px solid #6b4226;
+    margin-top: 1em;
+    flex-grow: 1;
+    overflow: auto;
+    border-radius: 4px;
+}
+
+/* Footer e icone */
+.footer-icon-container {
+    margin-top: 2em;
+    padding-top: 1em;
+    text-align: center;
+    border-top: 1px solid #e0e0e0;
+}
+.github-icon {
+    color: #6b4226;
+    transition: color 0.3s ease;
+}
+.github-icon:hover {
+    color: #a06e4e;
+}
+.footer-text {
+    font-size: 0.9em;
+    color: #6b4226;
+    margin-top: 0.5em;
+    text-align: center;
+}
+
+
+/* -------------------------------------- */
+/* 📱 Stili Responsive (Media Queries) */
+/* -------------------------------------- */
+
+@media screen and (max-width: 650px) {
+    
+    /* Regolazioni globali per schermi piccoli (Telefoni) */
+    body {
+        padding: 1em; /* Riduci il padding sui bordi */
     }
     
-    .footer-icon-container {
-        margin-top: 2em;
-        padding-top: 1em;
-        text-align: center;
-        border-top: 1px solid #e0e0e0;
+    h1 {
+        font-size: 1.8em; /* Riduci la dimensione del titolo */
     }
-    .github-icon {
-        color: #6b4226;
-        transition: color 0.3s ease;
+    
+    /* Regolazioni per campi e pulsanti */
+    select, textarea, button {
+        font-size: 1em; 
     }
-    .github-icon:hover {
-        color: #a06e4e;
+    
+    /* Pulsanti di Copia/Condividi: impilati verticalmente */
+    #shareButtons {
+        flex-direction: column; 
+        gap: 10px; /* Riduci il gap */
     }
+    
+    .action-button {
+        width: 100%; /* I pulsanti di Copia/Condividi occupano l'intera larghezza */
+        justify-content: center;
+    }
+    
+    pre {
+        font-size: 0.9em; /* Riduci la dimensione del testo di output per una migliore leggibilità */
+    }
+}
+
   </style>
 </head>
 <body>
@@ -96,17 +183,30 @@
 
   <label for="modelSelect">Scegli il modello AI:</label>
   <select id="modelSelect">
-    <option value="gpt-5">GPT-5</option>
-    <option value="gpt-5-mini">GPT-5</option>
-    <option value="mistralai/mixtral-8x7b-instruct-v0.1">Mixtral 8x7B</option>
+    <option value="gpt-5">GPT-5 (Consigliato)</option>
+    <option value="gpt-5-mini">GPT-5 mini</option>
     <option value="mistralai/mistral-7b-instruct-v0.1">Mistral 7B</option>
+    <option value="claude-sonnet-4">Claude Sonnet 4</option>
+    <option value="claude-opus-4">Claude Opus 4 (Consigliato)</option>
+  </select>
+  
+  <label for="typeSelect">Tipologia di Testo:</label>
+  <select id="typeSelect">
+    <option value="poesia o poema epico" selected>Poesia/Poema Epico</option>
+    <option value="orazione solenne">Orazione Solenne</option>
+    <option value="dialogo filosofico tra due personaggi">Dialogo Filosofico</option>
+    <option value="monologo drammatico">Monologo Drammatico</option>
+    <option value="testo in prosa narrativa">Prosa Narrativa</option>
   </select>
 
   <label for="lengthSelect">Lunghezza del componimento:</label>
   <select id="lengthSelect">
-    <option value="4-8 versi">Breve (4-8 versi)</option>
-    <option value="10-16 versi" selected>Media (10-16 versi)</option>
-    <option value="20-30 versi">Lunga (20-30 versi)</option>
+    <option value="4-8 versi/frasi">Breve (4-8 versi/frasi)</option>
+    <option value="10-16 versi/frasi" selected>Media (10-16 versi/frasi)</option>
+    <option value="20-30 versi/frasi">Lunga (20-30 versi/frasi)</option>
+    <option value="circa 100-150 parole (paragrafo lungo)">Molto Lunga (100-150 parole)</option>
+    <option value="circa 250-350 parole (circa un foglio)">Lunghissima (250-350 parole)</option>
+    <option value="circa 500-700 parole (poema/discorso esteso)">Epica (500-700 parole)</option>
   </select>
 
   <label for="languageSelect">Lingua:</label>
@@ -120,7 +220,7 @@
   <label for="prompt">Tema:</label>
   <textarea id="prompt" rows="4" placeholder="Es. Il giuramento di Annibale nel tempio di Baal..."></textarea>
   <br>
-  <button onclick="generaPoesia()">Genera poesia</button>
+  <button onclick="generaPoesia()">Genera testo</button>
   
   <pre id="output">🧠 Sto caricando il modello...</pre>
 
@@ -134,11 +234,12 @@
       <i class="fab fa-github fa-2x github-icon"></i>
     </a>
   </div>
+  <p class="footer-text">Realizzato con ❤️ da <strong>Mirko Yuri Donato</strong> </p>
 
   <script>
     async function setup() {
       document.getElementById('output').textContent = '🧠 Caricamento del modello poetico...';
-      document.getElementById('output').textContent = '✨ Pronto. Personalizza le opzioni, inserisci un tema e genera poesia.';
+      document.getElementById('output').textContent = '✨ Pronto. Personalizza le opzioni, inserisci un tema e genera testo.';
     }
 
     async function copyPoetry() {
@@ -158,7 +259,7 @@
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'La mia Poesia Epica',
+                    title: 'Il mio Componimento Epico',
                     text: textToShare,
                     url: window.location.href
                 });
@@ -171,44 +272,52 @@
     }
 
     function showShareButtons(show) {
-        document.getElementById('copyButton').style.display = show ? 'inline-block' : 'none'; // Usiamo inline-block per i pulsanti affiancati
+        document.getElementById('copyButton').style.display = show ? 'inline-block' : 'none';
         if (navigator.share) {
              document.getElementById('shareButton').style.display = show ? 'inline-block' : 'none';
         }
     }
 
-    window.generaPoesia = async function () {
-      const temaUtente = document.getElementById('prompt').value.trim();
-      const modelloScelto = document.getElementById('modelSelect').value;
-      const lunghezzaScelta = document.getElementById('lengthSelect').value;
-      const linguaScelta = document.getElementById('languageSelect').value;
+window.generaPoesia = async function () {
+    const temaUtente = document.getElementById('prompt').value.trim();
+    const modelloScelto = document.getElementById('modelSelect').value;
+    const lunghezzaScelta = document.getElementById('lengthSelect').value;
+    const linguaScelta = document.getElementById('languageSelect').value;
+    const tipoTestoScelto = document.getElementById('typeSelect').value;
 
-      if (!temaUtente) {
+    if (!temaUtente) {
         document.getElementById('output').textContent = '⚠️ Inserisci un tema.';
         showShareButtons(false);
         return;
-      }
-      
-      showShareButtons(false); // Nascondi i pulsanti durante la generazione
+    }
+    
+    showShareButtons(false); 
 
-      // Costruzione del prompt dinamico
-      const promptFinale = 
-        `Componi un testo poetico (poesia o poema epico) in lingua ${linguaScelta} sul tema: "${temaUtente}".
+    const promptFinale = 
+        `Componi un testo del tipo "${tipoTestoScelto}" in lingua ${linguaScelta} sul tema: "${temaUtente}".
          La lunghezza del componimento deve essere di circa ${lunghezzaScelta}.
-         Mantieni un tono solenne, formale e poetico, utilizzando rime o figure retoriche.`;
+         Mantieni un tono solenne, formale e poetico. Ad esempio, se è una poesia usa rime, se è un'orazione usa figure retoriche enfatiche, se è un dialogo mantieni la coerenza dei personaggi.`;
 
-      document.getElementById('output').textContent = 
-        `📝 Componendo versi (${lunghezzaScelta}) in ${linguaScelta} su "${temaUtente}" con ${modelloScelto.split('/').pop()}...`;
-      
-      const response = await puter.ai.chat(promptFinale, {
-        model: modelloScelto
-      });
-      
-      document.getElementById('output').textContent = response.message.content;
-      showShareButtons(true); // Mostra i pulsanti dopo la generazione
-    };
+    document.getElementById('output').textContent = 
+        `📝 Generando ${tipoTestoScelto} (${lunghezzaScelta}) in ${linguaScelta} su "${temaUtente}" con ${modelloScelto.split('/').pop()}...`;
+    
+    try {
+        const response = await puter.ai.chat(promptFinale, {
+            model: modelloScelto
+        });
+        
+        // ✨ CORREZIONE: Accedi a .message.content ✨
+        document.getElementById('output').textContent = response.message.content; 
+        showShareButtons(true);
+    } catch (error) {
+        // Gestione dell'errore per evitare [object Object]
+        console.error("Errore durante la generazione del testo:", error);
+        document.getElementById('output').textContent = '❌ Errore API. Il modello potrebbe non essere disponibile, o verifica la console per i dettagli: ' + error.toString();
+        showShareButtons(false);
+    }
+};
 
-    setup();
+setup();
   </script>
 </body>
 </html>
